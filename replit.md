@@ -1,15 +1,19 @@
-# [Project name]
+# BHAI AI YouTube Studio
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A single-owner production desk for developing original Hindi and Hinglish YouTube stories, scripts, and scene plans with owner-controlled project data.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/api-server run dev` — run the API server (the Replit workflow supplies `PORT`)
+- `pnpm --filter @workspace/youtube-studio run dev` — run the web app (the artifact workflow supplies `PORT` and `BASE_PATH`)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm --filter @workspace/db run push` — apply the Drizzle schema to the configured development database
+- Required server environment: `DATABASE_URL`, Clerk's server key, `SESSION_SECRET`
+- Required browser environment: Clerk's publishable key
+- Optional local inference: `STUDIO_OLLAMA_URL` and a manually installed, explicitly selected `STUDIO_OLLAMA_MODEL`
+- Optional YouTube OAuth: server-side `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, and exact callback `YOUTUBE_REDIRECT_URI`
 
 ## Stack
 
@@ -22,23 +26,37 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- Web app and responsive studio UI: `artifacts/youtube-studio`
+- Authenticated API and durable job worker: `artifacts/api-server`
+- PostgreSQL schema: `lib/db/src/schema/studio.ts`
+- Source-of-truth API contract: `lib/api-spec/openapi.yaml`
+- Generated client hooks and request schemas: `lib/api-client-react` and `lib/api-zod`
+- Self-host and model setup notes: `artifacts/youtube-studio/README.md`
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The studio is single-owner; the first authenticated account claims the owner slot. Restrict account creation before exposing an uninitialized instance publicly.
+- Jobs are stored in PostgreSQL and resumed after API restart. Retries are bounded; only validated Ollama results are marked successful.
+- Paid model APIs are not used. Local Ollama is opt-in and never downloaded or silently selected by the app.
+- YouTube refresh tokens are encrypted server-side using a key derived from the stable `SESSION_SECRET`. Preserve that secret for channel reconnect-free migration.
+- YouTube upload is not implemented. OAuth currently requests read and analytics scopes only; the UI does not offer a fake upload action.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+The current working slice provides project/script editing, reusable text character profiles, scene editing, durable story and scene-breakdown jobs, engine health, a JSON data backup/restore flow, and optional YouTube channel connection/authorized analytics. Real story/scene generation requires a reachable, locally installed Ollama model. Image/video generation, voice synthesis, editing/rendering, media files, and YouTube uploading are not implemented yet.
 
-## User preferences
+## User requirements
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Keep the core independent of paid AI providers, preserve owner control, and clearly distinguish tested functionality from unverified or unavailable engines.
+- Never report generation, rendering, an upload, media, analytics, or success unless the real provider/API has confirmed it and the output has passed validation.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- The browser talks to the API through same-origin `/api`; do not enable reflective credentialed CORS.
+- The initial owner account is selected by first authenticated API use. Lock down sign-up or place the service behind a trusted access gate before first use on a public host.
+- JSON backup covers project records, scripts, scenes, and characters—not job history, OAuth tokens, model weights, or media files. Keep a separate PostgreSQL backup.
+- YouTube requires a Google OAuth application whose registered callback exactly matches `YOUTUBE_REDIRECT_URI`; public upload approval controls are not shipped.
+- The Replit-managed Clerk setup is not self-hosted authentication. VPS migration requires a compatible authentication provider and corresponding middleware configuration.
 
 ## Pointers
 

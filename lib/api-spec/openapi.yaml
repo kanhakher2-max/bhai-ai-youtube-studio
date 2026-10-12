@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: API for BHAI AI YouTube Studio
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: studio
+    description: Owner-controlled video production workspace
+  - name: youtube
+    description: Optional YouTube channel connection and publishing
 paths:
   /healthz:
     get:
@@ -24,6 +28,397 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /studio/overview:
+    get:
+      operationId: getStudioOverview
+      tags: [studio]
+      summary: Get studio totals and recent activity
+      responses:
+        "200":
+          description: Studio overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioOverview"
+  /studio/projects:
+    get:
+      operationId: listStudioProjects
+      tags: [studio]
+      summary: List production projects
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudioProject"
+    post:
+      operationId: createStudioProject
+      tags: [studio]
+      summary: Create a production project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudioProjectInput"
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioProject"
+  /studio/projects/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getStudioProject
+      tags: [studio]
+      summary: Get a production project
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioProject"
+        "404":
+          description: Project not found
+    patch:
+      operationId: updateStudioProject
+      tags: [studio]
+      summary: Update project settings or script
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudioProjectUpdate"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioProject"
+    delete:
+      operationId: deleteStudioProject
+      tags: [studio]
+      summary: Delete a project and its editable records
+      responses:
+        "204":
+          description: Project deleted
+  /studio/projects/{id}/scenes:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: listProjectScenes
+      tags: [studio]
+      summary: List a project's scenes
+      responses:
+        "200":
+          description: Scenes in sequence order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudioScene"
+    post:
+      operationId: createProjectScene
+      tags: [studio]
+      summary: Add a scene to a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudioSceneInput"
+      responses:
+        "201":
+          description: Created scene
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioScene"
+  /studio/scenes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateStudioScene
+      tags: [studio]
+      summary: Edit an individual scene
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudioSceneUpdate"
+      responses:
+        "200":
+          description: Updated scene
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioScene"
+    delete:
+      operationId: deleteStudioScene
+      tags: [studio]
+      summary: Delete a scene
+      responses:
+        "204":
+          description: Scene deleted
+  /studio/characters:
+    get:
+      operationId: listStudioCharacters
+      tags: [studio]
+      summary: List reusable character profiles
+      responses:
+        "200":
+          description: Character profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudioCharacter"
+    post:
+      operationId: createStudioCharacter
+      tags: [studio]
+      summary: Create a reusable character profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudioCharacterInput"
+      responses:
+        "201":
+          description: Created character
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioCharacter"
+  /studio/characters/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateStudioCharacter
+      tags: [studio]
+      summary: Update a reusable character profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudioCharacterUpdate"
+      responses:
+        "200":
+          description: Updated character
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioCharacter"
+    delete:
+      operationId: deleteStudioCharacter
+      tags: [studio]
+      summary: Delete a reusable character profile
+      responses:
+        "204":
+          description: Character deleted
+  /studio/projects/{id}/jobs/story:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: createStoryGenerationJob
+      tags: [studio]
+      summary: Queue a story and script from a configured local language model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoryGenerationInput"
+      responses:
+        "202":
+          description: Generation job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioJob"
+  /studio/projects/{id}/jobs/scenes:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: createSceneBreakdownJob
+      tags: [studio]
+      summary: Queue a scene breakdown from the saved script
+      responses:
+        "202":
+          description: Scene breakdown job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioJob"
+  /studio/jobs:
+    get:
+      operationId: listStudioJobs
+      tags: [studio]
+      summary: List generation and rendering jobs
+      parameters:
+        - name: projectId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudioJob"
+  /studio/jobs/{id}/retry:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: retryStudioJob
+      tags: [studio]
+      summary: Retry a failed generation job
+      responses:
+        "202":
+          description: Job queued for retry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioJob"
+  /studio/jobs/{id}/cancel:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: cancelStudioJob
+      tags: [studio]
+      summary: Cancel a queued or safely cancellable running job
+      responses:
+        "200":
+          description: Job cancelled or cancellation requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioJob"
+  /studio/engines:
+    get:
+      operationId: getStudioEngines
+      tags: [studio]
+      summary: Check configured local and external engine health
+      responses:
+        "200":
+          description: Engine health checks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudioEngine"
+  /studio/backup:
+    get:
+      operationId: exportStudioBackup
+      tags: [studio]
+      summary: Export studio data as a portable JSON backup
+      responses:
+        "200":
+          description: Backup payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioBackup"
+  /studio/restore:
+    post:
+      operationId: restoreStudioBackup
+      tags: [studio]
+      summary: Restore a portable studio backup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudioBackup"
+      responses:
+        "200":
+          description: Restore counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestoreResult"
+  /studio/youtube/status:
+    get:
+      operationId: getYouTubeStatus
+      tags: [youtube]
+      summary: Get YouTube OAuth and connected channel status
+      responses:
+        "200":
+          description: YouTube connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/YouTubeStatus"
+  /studio/youtube/analytics:
+    get:
+      operationId: getYouTubeAnalytics
+      tags: [youtube]
+      summary: Get authorized YouTube channel analytics
+      responses:
+        "200":
+          description: Authorized analytics, or a clear unavailable reason
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/YouTubeAnalytics"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +428,203 @@ components:
           type: string
       required:
         - status
+    StudioProject:
+      type: object
+      required: [id, title, idea, language, genre, targetMinutes, visualStyle, scriptText, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        idea: { type: string }
+        language: { type: string, enum: [Hindi, Hinglish, English] }
+        genre: { type: string }
+        targetMinutes: { type: integer, enum: [5, 6, 7, 8] }
+        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic] }
+        scriptText: { type: string }
+        status: { type: string, enum: [concept, script_ready, scenes_ready, rendering, complete] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    StudioProjectInput:
+      type: object
+      required: [title, idea, language, genre, targetMinutes, visualStyle]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 160 }
+        idea: { type: string, maxLength: 5000 }
+        language: { type: string, enum: [Hindi, Hinglish, English] }
+        genre: { type: string, minLength: 1, maxLength: 80 }
+        targetMinutes: { type: integer, enum: [5, 6, 7, 8] }
+        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic] }
+    StudioProjectUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1, maxLength: 160 }
+        idea: { type: string, maxLength: 5000 }
+        language: { type: string, enum: [Hindi, Hinglish, English] }
+        genre: { type: string, minLength: 1, maxLength: 80 }
+        targetMinutes: { type: integer, enum: [5, 6, 7, 8] }
+        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic] }
+        scriptText: { type: string, maxLength: 100000 }
+    StudioScene:
+      type: object
+      required: [id, projectId, sequence, title, durationSeconds, action, dialogue, narration, background, camera, visualPrompt, audioNotes, assetPath, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        sequence: { type: integer }
+        title: { type: string }
+        durationSeconds: { type: integer }
+        action: { type: string }
+        dialogue: { type: string }
+        narration: { type: string }
+        background: { type: string }
+        camera: { type: string }
+        visualPrompt: { type: string }
+        audioNotes: { type: string }
+        assetPath: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    StudioSceneInput:
+      type: object
+      required: [title, durationSeconds]
+      properties:
+        sequence: { type: integer, minimum: 1 }
+        title: { type: string, minLength: 1, maxLength: 160 }
+        durationSeconds: { type: integer, minimum: 1, maximum: 600 }
+        action: { type: string, maxLength: 5000 }
+        dialogue: { type: string, maxLength: 10000 }
+        narration: { type: string, maxLength: 10000 }
+        background: { type: string, maxLength: 2000 }
+        camera: { type: string, maxLength: 2000 }
+        visualPrompt: { type: string, maxLength: 5000 }
+        audioNotes: { type: string, maxLength: 2000 }
+    StudioSceneUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        sequence: { type: integer, minimum: 1 }
+        title: { type: string, minLength: 1, maxLength: 160 }
+        durationSeconds: { type: integer, minimum: 1, maximum: 600 }
+        action: { type: string, maxLength: 5000 }
+        dialogue: { type: string, maxLength: 10000 }
+        narration: { type: string, maxLength: 10000 }
+        background: { type: string, maxLength: 2000 }
+        camera: { type: string, maxLength: 2000 }
+        visualPrompt: { type: string, maxLength: 5000 }
+        audioNotes: { type: string, maxLength: 2000 }
+    StudioCharacter:
+      type: object
+      required: [id, name, description, appearance, voiceNotes, visualStyle, referencePath, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        appearance: { type: string }
+        voiceNotes: { type: string }
+        visualStyle: { type: string }
+        referencePath: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    StudioCharacterInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 5000 }
+        appearance: { type: string, maxLength: 5000 }
+        voiceNotes: { type: string, maxLength: 2000 }
+        visualStyle: { type: string, maxLength: 80 }
+    StudioCharacterUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 5000 }
+        appearance: { type: string, maxLength: 5000 }
+        voiceNotes: { type: string, maxLength: 2000 }
+        visualStyle: { type: string, maxLength: 80 }
+    StoryGenerationInput:
+      type: object
+      required: [idea, language, genre, targetMinutes, visualStyle]
+      properties:
+        idea: { type: string, minLength: 1, maxLength: 5000 }
+        language: { type: string, enum: [Hindi, Hinglish, English] }
+        genre: { type: string, minLength: 1, maxLength: 80 }
+        targetMinutes: { type: integer, enum: [5, 6, 7, 8] }
+        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic] }
+    StudioJob:
+      type: object
+      required: [id, projectId, type, status, progress, attempt, maxAttempts, message, error, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        type: { type: string, enum: [story, scene_breakdown, render, youtube_upload] }
+        status: { type: string, enum: [queued, running, succeeded, failed, cancelled] }
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        attempt: { type: integer }
+        maxAttempts: { type: integer }
+        message: { type: string }
+        error: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    StudioEngine:
+      type: object
+      required: [id, name, local, configured, available, detail]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        local: { type: boolean }
+        configured: { type: boolean }
+        available: { type: boolean }
+        detail: { type: string }
+    StudioOverview:
+      type: object
+      required: [projectCount, activeJobs, failedJobs, scenes, recentJobs]
+      properties:
+        projectCount: { type: integer }
+        activeJobs: { type: integer }
+        failedJobs: { type: integer }
+        scenes: { type: integer }
+        recentJobs:
+          type: array
+          items: { $ref: "#/components/schemas/StudioJob" }
+    StudioBackup:
+      type: object
+      required: [formatVersion, exportedAt, projects, scenes, characters]
+      properties:
+        formatVersion: { type: integer, enum: [1] }
+        exportedAt: { type: string, format: date-time }
+        projects:
+          type: array
+          items: { $ref: "#/components/schemas/StudioProject" }
+        scenes:
+          type: array
+          items: { $ref: "#/components/schemas/StudioScene" }
+        characters:
+          type: array
+          items: { $ref: "#/components/schemas/StudioCharacter" }
+    RestoreResult:
+      type: object
+      required: [projects, scenes, characters]
+      properties:
+        projects: { type: integer }
+        scenes: { type: integer }
+        characters: { type: integer }
+    YouTubeStatus:
+      type: object
+      required: [configured, connected, channelTitle, detail]
+      properties:
+        configured: { type: boolean }
+        connected: { type: boolean }
+        channelTitle: { type: ["string", "null"] }
+        detail: { type: string }
+    YouTubeAnalytics:
+      type: object
+      required: [available, views, subscribers, estimatedRevenue, currency, detail]
+      properties:
+        available: { type: boolean }
+        views: { type: ["integer", "null"] }
+        subscribers: { type: ["integer", "null"] }
+        estimatedRevenue: { type: ["number", "null"] }
+        currency: { type: ["string", "null"] }
+        detail: { type: string }
 

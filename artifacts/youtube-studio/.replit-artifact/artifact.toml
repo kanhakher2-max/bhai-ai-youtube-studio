@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "BHAI AI YouTube Studio"
+description = "A single-owner Hindi and Hinglish story studio with persistent project, script, scene and character editing, optional local Ollama text generation, and optional authorized YouTube analytics. Image/video generation, voice, rendering and uploading are not implemented in this build."
+version = "1.0.0"
+id = "artifacts/youtube-studio"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20994
+
+[services.development]
+run = "pnpm --filter @workspace/youtube-studio run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/youtube-studio", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/youtube-studio/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20994"
+BASE_PATH = "/"

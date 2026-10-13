@@ -279,7 +279,7 @@ function PublishingPage() {
   const status = useGetYouTubeStatus();
   const analytics = useGetYouTubeAnalytics();
   const projects = useListStudioProjects();
-  const jobs = useListStudioJobs({}, { query: { refetchInterval: 5000 } });
+  const jobs = useListStudioJobs({}, { query: { queryKey: getListStudioJobsQueryKey({}), refetchInterval: 5000 } });
   const client = useQueryClient();
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);

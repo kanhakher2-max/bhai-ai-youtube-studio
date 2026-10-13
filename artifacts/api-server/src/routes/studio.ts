@@ -1,6 +1,7 @@
 import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { Router, type IRouter, type Request, type Response } from "express";
+import { z } from "zod";
 import {
   CancelStudioJobParams,
   CreateProjectSceneBody,
@@ -882,6 +883,50 @@ router.get("/studio/youtube/analytics", async (req, res) => {
   }
 });
 
+
+router.post("/studio/projects/:id/youtube-upload", async (req, res) => {
+  const params = GetStudioProjectParams.safeParse(req.params);
+  const body = z.object({
+    title: z.string().trim().min(1).max(100),
+    description: z.string().trim().max(5_000).default(""),
+    privacyStatus: z.enum(["private", "unlisted", "public"]).default("private"),
+  }).safeParse(req.body);
+  if (!params.success || !body.success) {
+    badRequest(res, !body.success ? body.error.issues[0]?.message ?? "Invalid upload details." : "Invalid project ID.");
+    return;
+  }
+  try {
+    const project = await requireProject(params.data.id);
+    if (!project) { notFound(res, "Project not found."); return; }
+    if (project.status !== "complete") {
+      res.status(409).json({ error: "Render the project to a completed MP4 before uploading it." });
+      return;
+    }
+    const status = await youtubeStatus();
+    if (!status.configured || !status.connected) {
+      res.status(409).json({ error: "Connect a YouTube channel before uploading a video." });
+      return;
+    }
+    try { await access(studioVideoPath(project.id), constants.R_OK); }
+    catch { res.status(404).json({ error: "Completed MP4 is missing. Render the project again before uploading." }); return; }
+    const userId = getAuth(req).userId;
+    if (!userId || !generationRateAllowed(userId)) {
+      res.status(429).json({ error: "Upload submissions are limited to three jobs per minute." });
+      return;
+    }
+    const duplicate = await db.select({ total: count() }).from(studioJobsTable).where(and(
+      eq(studioJobsTable.projectId, project.id),
+      eq(studioJobsTable.type, "youtube_upload"),
+      inArray(studioJobsTable.status, ["queued", "running"]),
+    ));
+    if ((duplicate[0]?.total ?? 0) > 0) {
+      res.status(409).json({ error: "A YouTube upload for this project is already queued or running." });
+      return;
+    }
+    const job = await queueStudioJob(project.id, "youtube_upload", body.data);
+    res.status(202).json(job);
+  } catch (error) { reportError(req, res, error); }
+});
 
 router.get("/studio/projects/:id/video", async (req, res) => {
   const params = GetStudioProjectParams.safeParse(req.params);

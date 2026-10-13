@@ -7,6 +7,9 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
+import { Readable } from "node:stream";
 import type { Request, Response as ExpressResponse } from "express";
 import { db, studioOwnersTable } from "@workspace/db";
 
@@ -19,6 +22,7 @@ const OAUTH_COOKIE_TTL_MS = 5 * 60 * 1000;
 
 const YOUTUBE_SCOPES = [
   "https://www.googleapis.com/auth/youtube.readonly",
+  "https://www.googleapis.com/auth/youtube.upload",
   "https://www.googleapis.com/auth/yt-analytics.readonly",
   "https://www.googleapis.com/auth/yt-analytics-monetary.readonly",
 ];
@@ -234,8 +238,8 @@ export async function youtubeStatus() {
     detail: !config
       ? "Add YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET and an HTTPS YOUTUBE_REDIRECT_URI as server-side secrets. No account is connected."
       : connected
-        ? "Channel connected. OAuth refresh tokens are encrypted on the server; the original SESSION_SECRET is required to decrypt them after migration."
-        : "YouTube OAuth is configured. Use Connect channel to grant read-only channel and analytics scopes.",
+        ? "Channel connected. OAuth refresh tokens are encrypted on the server; the original SESSION_SECRET is required to decrypt them after migration. If connected before upload permission was added, reconnect to grant upload scope."
+        : "YouTube OAuth is configured. Use Connect channel to grant channel, upload, and analytics scopes.",
   };
 }
 
@@ -410,6 +414,71 @@ async function getAccessToken(): Promise<{
     );
   }
   return { accessToken: result.body.access_token, owner };
+}
+
+export async function uploadYouTubeVideo(input: {
+  filePath: string; title: string; description: string;
+  privacyStatus: "private" | "unlisted" | "public"; signal: AbortSignal;
+}): Promise<{ videoId: string; url: string; title: string; privacyStatus: "private" | "unlisted" | "public" }> {
+  const file = await stat(input.filePath);
+  if (!file.isFile() || file.size < 1_024) throw new Error("The rendered MP4 is missing or unexpectedly small.");
+  const maxBytes = Math.max(1_024 * 1_024, Number(process.env.STUDIO_YOUTUBE_UPLOAD_MAX_BYTES) || 8 * 1024 * 1024 * 1024);
+  if (file.size > maxBytes) throw new Error("MP4 exceeds the configured upload limit of " + (maxBytes / (1024 * 1024 * 1024)).toFixed(1) + " GiB.");
+  if (!input.title.trim() || input.title.trim().length > 100) throw new Error("YouTube title must contain 1–100 characters.");
+  if (input.description.length > 5_000) throw new Error("YouTube description cannot exceed 5,000 characters.");
+  if (input.signal.aborted) throw new Error("YouTube upload was cancelled before it started.");
+  const { accessToken } = await getAccessToken();
+  const createUrl = new URL("https://www.googleapis.com/upload/youtube/v3/videos");
+  createUrl.searchParams.set("uploadType", "resumable");
+  createUrl.searchParams.set("part", "snippet,status");
+  const metadata = {
+    snippet: { title: input.title.trim(), description: input.description.trim(), categoryId: "1" },
+    status: { privacyStatus: input.privacyStatus, selfDeclaredMadeForKids: false },
+  };
+  const started = await fetch(createUrl, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+      "Content-Type": "application/json; charset=UTF-8",
+      "X-Upload-Content-Type": "video/mp4",
+      "X-Upload-Content-Length": String(file.size),
+    },
+    body: JSON.stringify(metadata),
+    signal: AbortSignal.any([input.signal, AbortSignal.timeout(20_000)]),
+  });
+  if (!started.ok) throw new Error("YouTube rejected upload setup (HTTP " + started.status + "): " + (await started.text()).slice(0, 400));
+  const location = started.headers.get("location");
+  if (!location) throw new Error("YouTube did not return a resumable upload URL.");
+  let uploadUrl: URL;
+  try { uploadUrl = new URL(location); } catch { throw new Error("YouTube returned an invalid resumable upload URL."); }
+  if (uploadUrl.protocol !== "https:" || !/(^|\.)googleapis\.com$/iu.test(uploadUrl.hostname)) {
+    throw new Error("YouTube returned an unexpected upload host; upload was stopped for safety.");
+  }
+  const timeout = Math.min(7_200_000, Math.max(60_000, Number(process.env.STUDIO_YOUTUBE_UPLOAD_TIMEOUT_MS) || 3_600_000));
+  const stream = createReadStream(input.filePath);
+  let response: Response;
+  try {
+    response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { Authorization: "Bearer " + accessToken, "Content-Type": "video/mp4", "Content-Length": String(file.size) },
+      body: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
+      duplex: "half",
+      signal: AbortSignal.any([input.signal, AbortSignal.timeout(timeout)]),
+    } as RequestInit & { duplex: "half" });
+  } finally { stream.destroy(); }
+  const bodyText = await response.text();
+  let body: Record<string, unknown> = {};
+  try { body = JSON.parse(bodyText) as Record<string, unknown>; } catch { /* sanitize below */ }
+  if (!response.ok) {
+    const error = body.error;
+    const reason = typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message || "")
+      : bodyText.slice(0, 400);
+    throw new Error("YouTube upload failed (HTTP " + response.status + "): " + reason);
+  }
+  const videoId = body.id;
+  if (typeof videoId !== "string" || !/^[A-Za-z0-9_-]{6,64}$/u.test(videoId)) throw new Error("YouTube upload response did not contain a valid video ID.");
+  return { videoId, url: "https://www.youtube.com/watch?v=" + videoId, title: input.title.trim(), privacyStatus: input.privacyStatus };
 }
 
 export async function youtubeAnalytics() {

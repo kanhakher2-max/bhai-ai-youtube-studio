@@ -1,7 +1,7 @@
 kind = "web"
 previewPath = "/"
 title = "BHAI AI YouTube Studio"
-description = "A single-owner Hindi and Hinglish story studio with persistent project, script, scene and character editing, optional local Ollama text generation, and optional authorized YouTube analytics. Image/video generation, voice, rendering and uploading are not implemented in this build."
+description = "A single-owner Hindi and Hinglish production studio with local Ollama story generation, scene planning, FFmpeg MP4 rendering, optional ComfyUI still/video workflows, Piper narration, local soundtrack mixing, thumbnail downloads, and owner-approved YouTube uploads when configured."
 version = "1.0.0"
 id = "artifacts/youtube-studio"
 router = "path"

@@ -472,9 +472,11 @@ async function runFullVideoJob(
     },
   });
   await ensureNotCancelled(job.id, signal);
-  const summary = renderResult.mode === "comfyui-stills"
-    ? "MP4 rendered using configured ComfyUI scene artwork."
-    : "Storyboard-card MP4 rendered; image generation is not configured.";
+  const summary = renderResult.mode === "comfyui-video"
+    ? "MP4 rendered using configured ComfyUI generated motion clips."
+    : renderResult.mode === "comfyui-stills"
+      ? "MP4 rendered using configured ComfyUI scene artwork."
+      : "Storyboard-card MP4 rendered; no generated artwork or video clips were available.";
   const message = [
     summary,
     renderResult.hasNarration ? "Local Piper narration included." : "No narration audio was added.",

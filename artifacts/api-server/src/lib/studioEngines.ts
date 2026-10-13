@@ -135,20 +135,25 @@ async function checkComfyUI(): Promise<StudioEngine> {
     };
   }
   const promptNodeId = process.env.STUDIO_COMFY_PROMPT_NODE_ID?.trim();
+  const videoPromptNodeId = process.env.STUDIO_COMFY_VIDEO_PROMPT_NODE_ID?.trim() || promptNodeId;
   const imageReady = Boolean(imageWorkflow && promptNodeId);
+  const videoReady = Boolean(videoWorkflow && videoPromptNodeId);
+  const configured = imageReady || videoReady;
   return {
     id: "comfyui",
-    name: "ComfyUI image generation",
+    name: videoReady ? "ComfyUI image/video generation" : "ComfyUI image generation",
     local: true,
-    configured: imageReady,
-    available: imageReady,
-    detail: imageReady
-      ? "ComfyUI is reachable and the still-image workflow plus prompt node are configured. Actual output is validated during a video job."
-      : imageWorkflow
-        ? "ComfyUI is reachable, but STUDIO_COMFY_PROMPT_NODE_ID must identify the positive prompt node with inputs.text."
+    configured,
+    available: configured,
+    detail: videoReady
+      ? "ComfyUI is reachable and a video workflow plus prompt node are configured. Each generated clip is validated when a video job runs; model quality and memory compatibility are not inferred."
+      : imageReady
+        ? "ComfyUI is reachable and the still-image workflow plus prompt node are configured. Actual output is validated during a video job."
         : videoWorkflow
-          ? "A ComfyUI video workflow path is set, but this renderer currently uses still-image workflows only."
-          : "ComfyUI is reachable, but STUDIO_COMFY_IMAGE_WORKFLOW is not configured. Models are never downloaded automatically.",
+          ? "ComfyUI video workflow is set, but STUDIO_COMFY_VIDEO_PROMPT_NODE_ID or STUDIO_COMFY_PROMPT_NODE_ID must identify an inputs.text prompt node."
+          : imageWorkflow
+            ? "ComfyUI is reachable, but STUDIO_COMFY_PROMPT_NODE_ID must identify the positive prompt node with inputs.text."
+            : "ComfyUI is reachable, but no image or video workflow is configured. Models are never downloaded automatically.",
   };
 }
 

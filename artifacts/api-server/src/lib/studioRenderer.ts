@@ -15,12 +15,13 @@ export type RenderScene = {
   visualPrompt: string;
 };
 type ComfyNode = { class_type?: string; inputs?: Record<string, unknown> };
-type ComfyImage = { filename?: string; subfolder?: string; type?: string };
-type ComfyHistory = Record<string, { outputs?: Record<string, { images?: ComfyImage[] }>; status?: { status_str?: string } }>;
+type ComfyMedia = { filename?: string; subfolder?: string; type?: string };
+type ComfyOutput = { images?: ComfyMedia[]; videos?: ComfyMedia[]; gifs?: ComfyMedia[] };
+type ComfyHistory = Record<string, { outputs?: Record<string, ComfyOutput>; status?: { status_str?: string } }>;
 export type StudioRenderResult = {
   outputPath: string;
   thumbnailPath: string | null;
-  mode: "comfyui-stills" | "storyboard-cards";
+  mode: "comfyui-video" | "comfyui-stills" | "storyboard-cards";
   hasNarration: boolean;
   hasMusic: boolean;
   warnings: string[];
@@ -87,21 +88,40 @@ function comfyUrl(): URL {
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error("STUDIO_COMFY_URL must be an HTTP(S) base URL without credentials/query.");
   return url;
 }
-async function makeImage(scene: RenderScene, destination: string, signal: AbortSignal): Promise<void> {
-  const workflowPath = process.env.STUDIO_COMFY_IMAGE_WORKFLOW?.trim();
-  const promptNodeId = process.env.STUDIO_COMFY_PROMPT_NODE_ID?.trim();
-  if (!workflowPath || !promptNodeId) throw new Error("Set STUDIO_COMFY_IMAGE_WORKFLOW and STUDIO_COMFY_PROMPT_NODE_ID.");
+async function makeComfyMedia(
+  scene: RenderScene,
+  destination: string,
+  signal: AbortSignal,
+  mode: "image" | "video",
+): Promise<void> {
+  const isVideo = mode === "video";
+  const workflowPath = (isVideo ? process.env.STUDIO_COMFY_VIDEO_WORKFLOW : process.env.STUDIO_COMFY_IMAGE_WORKFLOW)?.trim();
+  const promptNodeId = (isVideo
+    ? process.env.STUDIO_COMFY_VIDEO_PROMPT_NODE_ID || process.env.STUDIO_COMFY_PROMPT_NODE_ID
+    : process.env.STUDIO_COMFY_PROMPT_NODE_ID)?.trim();
+  const negativeNodeId = (isVideo
+    ? process.env.STUDIO_COMFY_VIDEO_NEGATIVE_NODE_ID || process.env.STUDIO_COMFY_NEGATIVE_NODE_ID
+    : process.env.STUDIO_COMFY_NEGATIVE_NODE_ID)?.trim();
+  if (!workflowPath || !promptNodeId) {
+    throw new Error(isVideo
+      ? "Set STUDIO_COMFY_VIDEO_WORKFLOW and STUDIO_COMFY_VIDEO_PROMPT_NODE_ID (or STUDIO_COMFY_PROMPT_NODE_ID)."
+      : "Set STUDIO_COMFY_IMAGE_WORKFLOW and STUDIO_COMFY_PROMPT_NODE_ID.");
+  }
   const workflow = await readComfyWorkflow(workflowPath) as Record<string, ComfyNode>;
   const positive = workflow[promptNodeId];
-  if (!positive?.inputs || typeof positive.inputs.text !== "string") throw new Error("The selected ComfyUI prompt node must have inputs.text; export the workflow in API format.");
-  positive.inputs.text = scene.visualPrompt + "\nOriginal scene illustration. Strong composition and readable silhouettes. No text, lettering, logos, watermark, or split panels.";
-  const negativeId = process.env.STUDIO_COMFY_NEGATIVE_NODE_ID?.trim();
-  if (negativeId && workflow[negativeId]?.inputs && typeof workflow[negativeId]?.inputs?.text === "string") {
-    workflow[negativeId]!.inputs!.text = "text, lettering, watermark, logo, blurry, distorted hands, duplicate people";
+  if (!positive?.inputs || typeof positive.inputs.text !== "string") {
+    throw new Error("The selected ComfyUI prompt node must have inputs.text; export the workflow in API format.");
+  }
+  positive.inputs.text = scene.visualPrompt + (isVideo
+    ? "\nGenerate a short continuous motion clip for this scene. Preserve subject identity, coherent movement, and the scene's visual style. No text, logos, watermarks, or split panels."
+    : "\nOriginal scene illustration. Strong composition and readable silhouettes. No text, lettering, logos, watermark, or split panels.");
+  if (negativeNodeId && workflow[negativeNodeId]?.inputs && typeof workflow[negativeNodeId]?.inputs?.text === "string") {
+    workflow[negativeNodeId]!.inputs!.text = "text, lettering, watermark, logo, blurry, distorted anatomy, duplicate people, incoherent motion";
   }
   const base = comfyUrl();
   const queued = await fetch(new URL("/prompt", base), {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt: workflow, client_id: randomUUID() }),
     signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
   });
@@ -110,7 +130,7 @@ async function makeImage(scene: RenderScene, destination: string, signal: AbortS
   if (!queuedData.prompt_id) throw new Error("ComfyUI did not return prompt_id.");
   const timeout = Math.min(600_000, Math.max(30_000, Number(process.env.STUDIO_COMFY_TIMEOUT_MS) || 240_000));
   const started = Date.now();
-  let image: ComfyImage | undefined;
+  let media: ComfyMedia | undefined;
   while (Date.now() - started < timeout) {
     await wait(1_000, signal);
     const response = await fetch(new URL("/history/" + encodeURIComponent(queuedData.prompt_id), base), {
@@ -120,21 +140,37 @@ async function makeImage(scene: RenderScene, destination: string, signal: AbortS
     if (!response.ok) continue;
     const history = await response.json() as ComfyHistory;
     const record = history[queuedData.prompt_id];
-    if (record?.status?.status_str === "error") throw new Error("ComfyUI reported an image-generation error.");
-    const images = Object.values(record?.outputs ?? {}).flatMap((item) => item.images ?? []);
-    image = images.find((entry) => entry.filename && entry.type !== "temp") || images.find((entry) => entry.filename);
-    if (image?.filename) break;
+    if (record?.status?.status_str === "error") {
+      throw new Error("ComfyUI reported a " + (isVideo ? "video" : "image") + "-generation error.");
+    }
+    const outputs = Object.values(record?.outputs ?? {});
+    const candidates = isVideo
+      ? outputs.flatMap((item) => [...(item.videos ?? []), ...(item.gifs ?? [])])
+      : outputs.flatMap((item) => item.images ?? []);
+    media = candidates.find((entry) => entry.filename && entry.type !== "temp") || candidates.find((entry) => entry.filename);
+    if (media?.filename) break;
   }
-  if (!image?.filename) throw new Error("ComfyUI timed out before returning a scene image.");
+  if (!media?.filename) {
+    throw new Error("ComfyUI timed out before returning a " + (isVideo ? "video clip" : "scene image") + ".");
+  }
   const view = new URL("/view", base);
-  view.searchParams.set("filename", image.filename);
-  view.searchParams.set("subfolder", image.subfolder || "");
-  view.searchParams.set("type", image.type || "output");
-  const response = await fetch(view, { signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) });
-  if (!response.ok) throw new Error("ComfyUI image download failed with HTTP " + response.status + ".");
+  view.searchParams.set("filename", media.filename);
+  view.searchParams.set("subfolder", media.subfolder || "");
+  view.searchParams.set("type", media.type || "output");
+  const response = await fetch(view, { signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]) });
+  if (!response.ok) throw new Error("ComfyUI media download failed with HTTP " + response.status + ".");
   const bytes = Buffer.from(await response.arrayBuffer());
-  if (!bytes.length || bytes.length > 40 * 1024 * 1024) throw new Error("ComfyUI returned an empty or oversized image.");
+  const maxBytes = isVideo ? 400 * 1024 * 1024 : 40 * 1024 * 1024;
+  if (!bytes.length || bytes.length > maxBytes) {
+    throw new Error("ComfyUI returned an empty or oversized " + (isVideo ? "video clip" : "image") + ".");
+  }
   await writeFile(destination, bytes);
+}
+async function makeImage(scene: RenderScene, destination: string, signal: AbortSignal): Promise<void> {
+  return makeComfyMedia(scene, destination, signal, "image");
+}
+async function makeVideo(scene: RenderScene, destination: string, signal: AbortSignal): Promise<void> {
+  return makeComfyMedia(scene, destination, signal, "video");
 }
 async function piperAvailable(): Promise<boolean> {
   const bin = process.env.STUDIO_PIPER_BIN, model = process.env.STUDIO_PIPER_MODEL;
@@ -150,22 +186,23 @@ async function narrate(text: string, destination: string, signal: AbortSignal): 
   } catch { return false; }
 }
 async function renderClip(input: {
-  scene: RenderScene; image: string | null; wav: string | null; output: string;
+  scene: RenderScene; image: string | null; video: string | null; wav: string | null; output: string;
   work: string; font: string; width: number; height: number; index: number; signal: AbortSignal;
 }): Promise<void> {
-  const { scene, image, wav, output, work, font, width, height, index, signal } = input;
+  const { scene, image, video, wav, output, work, font, width, height, index, signal } = input;
   const seconds = Math.max(1, Math.min(600, Math.round(scene.durationSeconds)));
   const titlePath = path.join(work, "title-" + index + ".txt");
   const bodyPath = path.join(work, "body-" + index + ".txt");
   await writeFile(titlePath, caption(scene.title, width > height ? 46 : 25, 2), "utf8");
   await writeFile(bodyPath, caption(scene.dialogue || scene.narration || scene.action, width > height ? 48 : 25, width > height ? 8 : 12), "utf8");
   const args = ["-y"];
-  if (image) args.push("-loop", "1", "-framerate", "24", "-i", image);
+  if (video) args.push("-stream_loop", "-1", "-i", video);
+  else if (image) args.push("-loop", "1", "-framerate", "24", "-i", image);
   else args.push("-f", "lavfi", "-i", "color=c=" + ["0x172b4d","0x173b3f","0x3a244b","0x4a2b27","0x223748","0x30334d"][index % 6] + ":s=" + width + "x" + height + ":r=24");
   if (wav) args.push("-i", wav);
   else args.push("-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100");
   const filters = ["scale=" + width + ":" + height + ":force_original_aspect_ratio=increase", "crop=" + width + ":" + height];
-  if (image) filters.push("zoompan=z='min(zoom+0.00025,1.08)':d=1:s=" + width + "x" + height + ":fps=24");
+  if (image && !video) filters.push("zoompan=z='min(zoom+0.00025,1.08)':d=1:s=" + width + "x" + height + ":fps=24");
   const escapedFont = esc(font), title = esc(titlePath), body = esc(bodyPath);
   filters.push("drawtext=fontfile='" + escapedFont + "':textfile='" + title + "':fontcolor=white:fontsize=" + (width > height ? 46 : 34) + ":x=(w-text_w)/2:y=h*0.12:box=1:boxcolor=black@0.5:boxborderw=20");
   filters.push("drawtext=fontfile='" + escapedFont + "':textfile='" + body + "':fontcolor=white:fontsize=" + (width > height ? 31 : 26) + ":line_spacing=10:x=(w-text_w)/2:y=h*0.34:box=1:boxcolor=black@0.6:boxborderw=18");
@@ -189,6 +226,8 @@ export async function renderStudioVideo(input: {
   const width = input.aspectRatio === "9:16" ? 720 : 1280;
   const height = input.aspectRatio === "9:16" ? 1280 : 720;
   const imageEnabled = Boolean(process.env.STUDIO_COMFY_IMAGE_WORKFLOW?.trim() && process.env.STUDIO_COMFY_PROMPT_NODE_ID?.trim());
+  const videoPromptNode = process.env.STUDIO_COMFY_VIDEO_PROMPT_NODE_ID?.trim() || process.env.STUDIO_COMFY_PROMPT_NODE_ID?.trim();
+  const videoEnabled = Boolean(process.env.STUDIO_COMFY_VIDEO_WORKFLOW?.trim() && videoPromptNode);
   const voiceEnabled = await piperAvailable();
   const warnings: string[] = [];
   let musicFile: string | null = null;
@@ -199,23 +238,40 @@ export async function renderStudioVideo(input: {
     catch { warnings.push("STUDIO_MUSIC_FILE is configured but unreadable; no background music was added."); }
   }
   if (!musicFile) warnings.push("No local music bed is configured; the MP4 contains narration or silence only.");
-  if (!imageEnabled) warnings.push("ComfyUI workflow is not configured; scene cards were used instead of generated artwork.");
+  if (!videoEnabled) warnings.push("ComfyUI video workflow is not configured; true generated motion clips will not be available.");
+  if (!imageEnabled) warnings.push("ComfyUI still-image workflow is not configured; failed video scenes use storyboard cards.");
   if (!voiceEnabled) warnings.push("Piper voice model is not configured/readable; no narration audio was added.");
-  warnings.push("Renderer animates still artwork; true 3D/video-diffusion clips, lip-sync, and generated sound effects are not implemented.");
+  warnings.push("Generated clips depend on the selected local ComfyUI workflow and model. Character-reference consistency, lip-sync, and generated sound effects are not implemented.");
   try {
     const concatPath = path.join(work, "concat.txt");
     const clips: string[] = [];
     let narrated = 0;
+    let generatedVideoScenes = 0;
+    let generatedImageScenes = 0;
     for (let i = 0; i < input.scenes.length; i += 1) {
       if (input.signal.aborted) throw new Error("Video rendering was cancelled.");
       const scene = input.scenes[i];
       if (!scene) continue;
       const serial = String(i + 1).padStart(3, "0");
+      let video: string | null = null;
+      if (videoEnabled) {
+        const videoCandidate = path.join(work, "video-" + serial + ".media");
+        try {
+          await makeVideo(scene, videoCandidate, input.signal);
+          video = videoCandidate;
+          generatedVideoScenes += 1;
+        } catch (error) {
+          warnings.push("Scene " + scene.sequence + " fell back from generated video: " + (error instanceof Error ? error.message.slice(0, 150) : "unknown error"));
+        }
+      }
       let image: string | null = null;
-      if (imageEnabled) {
+      if (!video && imageEnabled) {
         const imageCandidate = path.join(work, "image-" + serial + ".png");
-        try { await makeImage(scene, imageCandidate, input.signal); image = imageCandidate; }
-        catch (error) {
+        try {
+          await makeImage(scene, imageCandidate, input.signal);
+          image = imageCandidate;
+          generatedImageScenes += 1;
+        } catch (error) {
           warnings.push("Scene " + scene.sequence + " used a storyboard card because image generation failed: " + (error instanceof Error ? error.message.slice(0, 150) : "unknown error"));
         }
       }
@@ -226,7 +282,7 @@ export async function renderStudioVideo(input: {
         else warnings.push("Piper did not create narration audio for scene " + scene.sequence + ".");
       }
       const clip = path.join(work, "scene-" + serial + ".mp4");
-      await renderClip({ scene, image, wav, output: clip, work, font, width, height, index: i, signal: input.signal });
+      await renderClip({ scene, image, video, wav, output: clip, work, font, width, height, index: i, signal: input.signal });
       clips.push("file 'scene-" + serial + ".mp4'");
       await input.onProgress?.(i + 1, input.scenes.length, "Rendered scene " + (i + 1) + " of " + input.scenes.length);
     }
@@ -264,8 +320,14 @@ export async function renderStudioVideo(input: {
     } catch (error) {
       warnings.push("Automatic thumbnail export failed: " + (error instanceof Error ? error.message.slice(0, 120) : "unknown error"));
     }
-    if (imageEnabled && !warnings.some((item) => item.includes("image generation failed"))) warnings.push("ComfyUI generated scene stills and FFmpeg added pan/zoom movement.");
-    return { outputPath, thumbnailPath: savedThumbnail, mode: imageEnabled ? "comfyui-stills" : "storyboard-cards", hasNarration: narrated > 0, hasMusic: Boolean(musicFile), warnings: [...new Set(warnings)].slice(0, 30) };
+    if (generatedVideoScenes > 0) warnings.push("ComfyUI generated motion clips were normalized, captioned, and joined into the MP4.");
+    if (generatedImageScenes > 0) warnings.push("ComfyUI generated scene stills and FFmpeg added pan/zoom movement for scenes without video clips.");
+    const mode: StudioRenderResult["mode"] = generatedVideoScenes > 0
+      ? "comfyui-video"
+      : generatedImageScenes > 0
+        ? "comfyui-stills"
+        : "storyboard-cards";
+    return { outputPath, thumbnailPath: savedThumbnail, mode, hasNarration: narrated > 0, hasMusic: Boolean(musicFile), warnings: [...new Set(warnings)].slice(0, 30) };
   } finally {
     await rm(work, { recursive: true, force: true }).catch(() => undefined);
   }

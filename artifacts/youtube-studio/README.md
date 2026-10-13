@@ -1,6 +1,6 @@
 # BHAI AI YouTube Studio
 
-This is a single-owner Hindi/Hinglish YouTube story studio. It stores projects in PostgreSQL and supports local Ollama story writing, timed scene planning, and a real FFmpeg MP4 renderer. When configured, a ComfyUI API-format workflow generates per-scene still artwork and Piper synthesizes local narration. No model weights are downloaded automatically and no paid AI provider is called.
+This is a single-owner Hindi/Hinglish YouTube story studio. It stores projects in PostgreSQL and supports local Ollama story writing, timed scene planning, and a real FFmpeg MP4 renderer. When configured, separate ComfyUI API-format workflows can generate per-scene motion clips or still artwork, and Piper synthesizes local narration. No model weights are downloaded automatically and no paid AI provider is called.
 
 ## What currently works
 
@@ -13,7 +13,7 @@ This is a single-owner Hindi/Hinglish YouTube story studio. It stores projects i
 - JSON export and transactional restore for project, scene, and character records.
 - Optional Google YouTube OAuth connection, authorized channel statistics / estimated-revenue queries, and user-approved resumable MP4 uploads. Refresh tokens are AES-GCM encrypted server-side.
 
-The MP4 pipeline does not yet generate true video-diffusion/3D clips, use uploaded character-reference images, lip-sync characters, synthesize original music/SFX, or convert an existing landscape project into a vertical Short. A user-supplied local soundtrack can be mixed at low volume, and the renderer exports a JPEG thumbnail from the finished MP4. ComfyUI still-image generation and Piper narration are optional and work only when correctly configured. If those optional engines are absent, the pipeline creates a storyboard-card MP4 and reports missing artwork/narration honestly. The final MP4 is stored under `STUDIO_MEDIA_DIR` (default `./data/studio-media`); configure persistent storage on your host to keep it across restarts/redeployments.
+The MP4 pipeline does not yet generate true video-diffusion/3D clips, use uploaded character-reference images, lip-sync characters, synthesize original music/SFX, or convert an existing landscape project into a vertical Short. A user-supplied local soundtrack can be mixed at low volume, and the renderer exports a JPEG thumbnail from the finished MP4. ComfyUI video/still generation and Piper narration are optional and work only when correctly configured. A video workflow still requires compatible video model weights and adequate GPU memory; none are downloaded automatically. If those optional engines are absent, the pipeline creates a storyboard-card MP4 and reports missing artwork/narration honestly. The final MP4 is stored under `STUDIO_MEDIA_DIR` (default `./data/studio-media`); configure persistent storage on your host to keep it across restarts/redeployments.
 
 ## Replit operation
 
@@ -47,10 +47,13 @@ STUDIO_COMFY_URL=http://127.0.0.1:8188
 STUDIO_COMFY_IMAGE_WORKFLOW=/absolute/path/to/workflow_api.json
 STUDIO_COMFY_PROMPT_NODE_ID=<node id whose inputs.text is the positive prompt>
 STUDIO_COMFY_NEGATIVE_NODE_ID=<optional negative prompt node id>
+STUDIO_COMFY_VIDEO_WORKFLOW=/absolute/path/to/video_workflow_api.json
+STUDIO_COMFY_VIDEO_PROMPT_NODE_ID=<positive video prompt node id; defaults to STUDIO_COMFY_PROMPT_NODE_ID>
+STUDIO_COMFY_VIDEO_NEGATIVE_NODE_ID=<optional video negative prompt node id>
 STUDIO_COMFY_TIMEOUT_MS=240000
 ```
 
-The positive prompt node must contain `inputs.text`. If an image-generation attempt fails, that scene falls back to a storyboard card and the job message reports the failure. Workflow reachability alone does not certify model quality or hardware compatibility.
+The selected positive prompt node must contain `inputs.text`. A video workflow must export a video/GIF output node through ComfyUI's history API. Generated clips are normalized by FFmpeg, captioned, and joined; a failed video scene falls back to configured still-image generation or a storyboard card, and the job records the warning. Workflow reachability alone does not certify model quality or hardware compatibility.
 
 Optional Piper narration and media output location use:
 

@@ -134,15 +134,21 @@ async function checkComfyUI(): Promise<StudioEngine> {
       detail: `ComfyUI is not reachable. Start it at ${url.origin}.`,
     };
   }
+  const promptNodeId = process.env.STUDIO_COMFY_PROMPT_NODE_ID?.trim();
+  const imageReady = Boolean(imageWorkflow && promptNodeId);
   return {
     id: "comfyui",
-    name: "ComfyUI image/video",
+    name: "ComfyUI image generation",
     local: true,
-    configured: Boolean(imageWorkflow || videoWorkflow),
-    available: false,
-    detail: imageWorkflow || videoWorkflow
-      ? "ComfyUI is reachable and a workflow path is configured, but this build does not submit image/video jobs. No generation has been run."
-      : "ComfyUI is reachable, but this build has no image/video job adapter and no workflow is configured.",
+    configured: imageReady,
+    available: imageReady,
+    detail: imageReady
+      ? "ComfyUI is reachable and the still-image workflow plus prompt node are configured. Actual output is validated during a video job."
+      : imageWorkflow
+        ? "ComfyUI is reachable, but STUDIO_COMFY_PROMPT_NODE_ID must identify the positive prompt node with inputs.text."
+        : videoWorkflow
+          ? "A ComfyUI video workflow path is set, but this renderer currently uses still-image workflows only."
+          : "ComfyUI is reachable, but STUDIO_COMFY_IMAGE_WORKFLOW is not configured. Models are never downloaded automatically.",
   };
 }
 
@@ -182,7 +188,7 @@ async function checkFfmpeg(): Promise<StudioEngine> {
         available: code === 0,
         detail:
           code === 0
-            ? "FFmpeg is installed. This build does not yet provide a render job or validate scene media."
+            ? "FFmpeg is installed and ready for storyboard-card or ComfyUI-still MP4 rendering."
             : "FFmpeg did not pass its version check.",
       });
     });
@@ -213,9 +219,9 @@ async function checkPiper(): Promise<StudioEngine> {
       name: "Piper speech synthesis",
       local: true,
       configured: true,
-      available: false,
+      available: true,
       detail:
-        "Piper executable and voice model files are present, but this build does not queue speech-synthesis jobs.",
+        "Piper executable and voice model files are readable and ready for local narration. Quality and language support depend on the chosen model.",
     };
   } catch {
     return {

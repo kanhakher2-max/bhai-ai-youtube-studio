@@ -1,6 +1,6 @@
 # BHAI AI YouTube Studio
 
-This is a single-owner writing and production-planning studio for Hindi and Hinglish YouTube stories. The app keeps project records in PostgreSQL and supports opt-in local text generation through Ollama. It does not call paid AI services or download models automatically.
+This is a single-owner Hindi/Hinglish YouTube story studio. It stores projects in PostgreSQL and supports local Ollama story writing, timed scene planning, and a real FFmpeg MP4 renderer. When configured, a ComfyUI API-format workflow generates per-scene still artwork and Piper synthesizes local narration. No model weights are downloaded automatically and no paid AI provider is called.
 
 ## What currently works
 
@@ -8,11 +8,12 @@ This is a single-owner writing and production-planning studio for Hindi and Hing
 - Persisted projects, editable scripts, scene breakdowns, and reusable text character profiles.
 - A PostgreSQL-backed job queue with cancellation, bounded transient retries, and recovery of interrupted work after API restart.
 - Local-engine health checks for Ollama, ComfyUI, FFmpeg, Piper, and optional Google OAuth settings.
+- MP4 export using animated scene stills, scene headings and script captions; optional ComfyUI still-image generation and Piper narration; owner-only MP4 download.
 - Ollama story and scene-breakdown jobs, enabled only when a matching local model is installed and reachable. Generated scripts/scenes must pass output structure and length checks before they are saved as successful.
 - JSON export and transactional restore for project, scene, and character records.
-- Optional Google YouTube OAuth connection and authorized channel statistics / estimated-revenue queries. Refresh tokens are AES-GCM encrypted server-side.
+- Optional Google YouTube OAuth connection, authorized channel statistics / estimated-revenue queries, and user-approved resumable MP4 uploads. Refresh tokens are AES-GCM encrypted server-side.
 
-The following production features are **not implemented**: image/video generation jobs, reference-image uploads, speech synthesis jobs, audio/SFX/music mixing, video editing/rendering, subtitle burning, thumbnail generation, Shorts conversion, and YouTube video uploads. FFmpeg being installed or ComfyUI/Piper being reachable is not evidence that those workflows are wired up. No output file, upload, or generated asset is reported as successful by this build.
+The MP4 pipeline does not yet generate true video-diffusion/3D clips, use uploaded character-reference images, lip-sync characters, mix music/SFX, create thumbnails, convert projects into Shorts, or upload finished videos to YouTube. ComfyUI still-image generation and Piper narration are optional and work only when correctly configured. If those optional engines are absent, the pipeline creates a storyboard-card MP4 and reports missing artwork/narration honestly. The final MP4 is stored under `STUDIO_MEDIA_DIR` (default `./data/studio-media`); configure persistent storage on your host to keep it across restarts/redeployments.
 
 ## Replit operation
 
@@ -37,6 +38,31 @@ Do not expose Ollama's unauthenticated port to the public internet. When Ollama 
 
 Hardware depends on the selected model, quantization, context size, and generation speed. As a planning estimate, a 7–8B quantized text model often needs roughly 5–8 GB of available memory for weights and more memory for runtime/context; 16 GB system RAM is a practical starting point, while a supported GPU with sufficient VRAM improves throughput. CPU inference may work but can be slow for long scripts. Check the chosen model's own hardware guidance before downloading it. Images, video, and voice have no working generation adapter in this build.
 
+## Local media rendering setup
+
+The MP4 renderer requires FFmpeg with H.264/AAC support and a readable font. For Hindi captions, set `STUDIO_FONT_FILE` to a Devanagari-capable font file. Optional ComfyUI image generation uses an API-format workflow exported from ComfyUI; place it on the API host and set:
+
+```text
+STUDIO_COMFY_URL=http://127.0.0.1:8188
+STUDIO_COMFY_IMAGE_WORKFLOW=/absolute/path/to/workflow_api.json
+STUDIO_COMFY_PROMPT_NODE_ID=<node id whose inputs.text is the positive prompt>
+STUDIO_COMFY_NEGATIVE_NODE_ID=<optional negative prompt node id>
+STUDIO_COMFY_TIMEOUT_MS=240000
+```
+
+The positive prompt node must contain `inputs.text`. If an image-generation attempt fails, that scene falls back to a storyboard card and the job message reports the failure. Workflow reachability alone does not certify model quality or hardware compatibility.
+
+Optional Piper narration and media output location use:
+
+```text
+STUDIO_PIPER_BIN=/absolute/path/to/piper
+STUDIO_PIPER_MODEL=/absolute/path/to/voice.onnx
+STUDIO_FFMPEG_BIN=ffmpeg
+STUDIO_MEDIA_DIR=/absolute/path/to/persistent/studio-media
+```
+
+No model is downloaded automatically. Check model license, language support, storage and memory needs. Current output is pan/zoom-animated stills, not true 3D animation or generative video. Lip-sync, music/SFX and thumbnail generation are not yet implemented.
+
 ## YouTube channel connection
 
 Create a Google OAuth application and enable the YouTube Data API and YouTube Analytics API. Set the following **server-side secrets/environment variables**:
@@ -47,7 +73,7 @@ YOUTUBE_CLIENT_SECRET
 YOUTUBE_REDIRECT_URI=https://<your-host>/api/studio/youtube/callback
 ```
 
-Register that exact redirect URI in the Google OAuth client. The owner must approve channel read and analytics scopes in the Google consent flow. The current build does not request an upload scope and cannot upload videos. Analytics only appear when YouTube authorizes them; estimated revenue can be unavailable for non-monetized channels or accounts without the required permission.
+Register that exact redirect URI in the Google OAuth client. The owner must approve channel read and analytics scopes in the Google consent flow. The app requests YouTube upload permission as well as analytics scopes. The owner selects a completed MP4, title, description and visibility and explicitly queues each upload. A previously connected channel may need to refresh its Google grant so the new upload scope is allowed. Interrupted transfers are marked failed rather than blindly retried because the upload might already have reached YouTube. Analytics only appear when authorized; estimated revenue can be unavailable for non-monetized channels or accounts without the required permission.
 
 The Google OAuth refresh token is stored encrypted in the owner row. Encryption derives from `SESSION_SECRET`; retain the same secret across backups and VPS migration or reconnect the channel. OAuth credentials and tokens are never sent to the browser. No live Google account or API quota was available to verify this integration in the current environment.
 

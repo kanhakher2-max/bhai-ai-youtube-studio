@@ -1,6 +1,7 @@
 import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { Router, type IRouter, type Request, type Response } from "express";
+import { z } from "zod";
 import {
   CancelStudioJobParams,
   CreateProjectSceneBody,
@@ -41,6 +42,9 @@ import {
   retryFailedStudioJob,
 } from "../lib/studioWorker";
 import { getStudioEngineHealth } from "../lib/studioEngines";
+import { access } from "node:fs/promises";
+import { constants } from "node:fs";
+import { studioVideoPath } from "../lib/studioRenderer";
 import {
   beginYouTubeOAuth,
   disconnectYouTube,
@@ -875,6 +879,78 @@ router.get("/studio/youtube/analytics", async (req, res) => {
   try {
     res.json(await youtubeAnalytics());
   } catch (error) {
+    reportError(req, res, error);
+  }
+});
+
+
+router.post("/studio/projects/:id/youtube-upload", async (req, res) => {
+  const params = GetStudioProjectParams.safeParse(req.params);
+  const body = z.object({
+    title: z.string().trim().min(1).max(100),
+    description: z.string().trim().max(5_000).default(""),
+    privacyStatus: z.enum(["private", "unlisted", "public"]).default("private"),
+  }).safeParse(req.body);
+  if (!params.success || !body.success) {
+    badRequest(res, !body.success ? body.error.issues[0]?.message ?? "Invalid upload details." : "Invalid project ID.");
+    return;
+  }
+  try {
+    const project = await requireProject(params.data.id);
+    if (!project) { notFound(res, "Project not found."); return; }
+    if (project.status !== "complete") {
+      res.status(409).json({ error: "Render the project to a completed MP4 before uploading it." });
+      return;
+    }
+    const status = await youtubeStatus();
+    if (!status.configured || !status.connected) {
+      res.status(409).json({ error: "Connect a YouTube channel before uploading a video." });
+      return;
+    }
+    try { await access(studioVideoPath(project.id), constants.R_OK); }
+    catch { res.status(404).json({ error: "Completed MP4 is missing. Render the project again before uploading." }); return; }
+    const userId = getAuth(req).userId;
+    if (!userId || !generationRateAllowed(userId)) {
+      res.status(429).json({ error: "Upload submissions are limited to three jobs per minute." });
+      return;
+    }
+    const duplicate = await db.select({ total: count() }).from(studioJobsTable).where(and(
+      eq(studioJobsTable.projectId, project.id),
+      eq(studioJobsTable.type, "youtube_upload"),
+      inArray(studioJobsTable.status, ["queued", "running"]),
+    ));
+    if ((duplicate[0]?.total ?? 0) > 0) {
+      res.status(409).json({ error: "A YouTube upload for this project is already queued or running." });
+      return;
+    }
+    const job = await queueStudioJob(project.id, "youtube_upload", body.data);
+    res.status(202).json(job);
+  } catch (error) { reportError(req, res, error); }
+});
+
+router.get("/studio/projects/:id/video", async (req, res) => {
+  const params = GetStudioProjectParams.safeParse(req.params);
+  if (!params.success) { badRequest(res, "Invalid project ID."); return; }
+  try {
+    const project = await requireProject(params.data.id);
+    if (!project) { notFound(res, "Project not found."); return; }
+    if (project.status !== "video_ready") {
+      res.status(409).json({ error: "No completed MP4 is available for this project yet." });
+      return;
+    }
+    const outputPath = studioVideoPath(project.id);
+    await access(outputPath, constants.R_OK);
+    res.download(outputPath, "bhai-ai-" + project.id + ".mp4", (error) => {
+      if (error) {
+        req.log.error({ err: error, projectId: project.id }, "MP4 download failed");
+        if (!res.headersSent) res.status(500).end();
+      }
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      res.status(404).json({ error: "MP4 file not present. Configure a persistent STUDIO_MEDIA_DIR and render again." });
+      return;
+    }
     reportError(req, res, error);
   }
 });

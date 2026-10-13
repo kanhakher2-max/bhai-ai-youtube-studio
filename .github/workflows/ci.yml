@@ -37,5 +37,9 @@ jobs:
           PORT: "20994"
           BASE_PATH: "/"
         run: pnpm run build
+      - name: Install media tools for renderer tests
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core
       - name: Run API unit tests
         run: pnpm --filter @workspace/api-server test

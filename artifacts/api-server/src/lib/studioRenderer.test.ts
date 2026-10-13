@@ -64,6 +64,8 @@ test("renderer produces a probeable MP4 from a one-scene storyboard", async (t) 
     font: process.env.STUDIO_FONT_FILE,
     comfy: process.env.STUDIO_COMFY_IMAGE_WORKFLOW,
     prompt: process.env.STUDIO_COMFY_PROMPT_NODE_ID,
+    comfyVideo: process.env.STUDIO_COMFY_VIDEO_WORKFLOW,
+    videoPrompt: process.env.STUDIO_COMFY_VIDEO_PROMPT_NODE_ID,
     piperBin: process.env.STUDIO_PIPER_BIN,
     piperModel: process.env.STUDIO_PIPER_MODEL,
     musicFile: process.env.STUDIO_MUSIC_FILE,
@@ -73,6 +75,8 @@ test("renderer produces a probeable MP4 from a one-scene storyboard", async (t) 
   process.env.STUDIO_FONT_FILE = font;
   delete process.env.STUDIO_COMFY_IMAGE_WORKFLOW;
   delete process.env.STUDIO_COMFY_PROMPT_NODE_ID;
+  delete process.env.STUDIO_COMFY_VIDEO_WORKFLOW;
+  delete process.env.STUDIO_COMFY_VIDEO_PROMPT_NODE_ID;
   delete process.env.STUDIO_PIPER_BIN;
   delete process.env.STUDIO_PIPER_MODEL;
   const musicFile = path.join(dir, "test-music.wav");
@@ -114,6 +118,8 @@ test("renderer produces a probeable MP4 from a one-scene storyboard", async (t) 
     if (saved.font === undefined) delete process.env.STUDIO_FONT_FILE; else process.env.STUDIO_FONT_FILE = saved.font;
     if (saved.comfy === undefined) delete process.env.STUDIO_COMFY_IMAGE_WORKFLOW; else process.env.STUDIO_COMFY_IMAGE_WORKFLOW = saved.comfy;
     if (saved.prompt === undefined) delete process.env.STUDIO_COMFY_PROMPT_NODE_ID; else process.env.STUDIO_COMFY_PROMPT_NODE_ID = saved.prompt;
+    if (saved.comfyVideo === undefined) delete process.env.STUDIO_COMFY_VIDEO_WORKFLOW; else process.env.STUDIO_COMFY_VIDEO_WORKFLOW = saved.comfyVideo;
+    if (saved.videoPrompt === undefined) delete process.env.STUDIO_COMFY_VIDEO_PROMPT_NODE_ID; else process.env.STUDIO_COMFY_VIDEO_PROMPT_NODE_ID = saved.videoPrompt;
     if (saved.piperBin === undefined) delete process.env.STUDIO_PIPER_BIN; else process.env.STUDIO_PIPER_BIN = saved.piperBin;
     if (saved.piperModel === undefined) delete process.env.STUDIO_PIPER_MODEL; else process.env.STUDIO_PIPER_MODEL = saved.piperModel;
     if (saved.musicFile === undefined) delete process.env.STUDIO_MUSIC_FILE; else process.env.STUDIO_MUSIC_FILE = saved.musicFile;

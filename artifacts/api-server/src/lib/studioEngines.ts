@@ -219,9 +219,9 @@ async function checkPiper(): Promise<StudioEngine> {
       name: "Piper speech synthesis",
       local: true,
       configured: true,
-      available: false,
+      available: true,
       detail:
-"Piper executable and voice model files are readable and ready for local narration. Quality and language support depend on the chosen model.",
+        "Piper executable and voice model files are readable and ready for local narration. Quality and language support depend on the chosen model.",
     };
   } catch {
     return {

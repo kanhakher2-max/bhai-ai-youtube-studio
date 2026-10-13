@@ -34,3 +34,5 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Typecheck and build workspace
         run: pnpm run build
+      - name: Run API unit tests
+        run: pnpm --filter @workspace/api-server test

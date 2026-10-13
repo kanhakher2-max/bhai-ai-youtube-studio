@@ -497,7 +497,7 @@ async function runFullVideoJob(
       .where(and(eq(studioJobsTable.id, job.id), eq(studioJobsTable.status, "running")))
       .returning({ id: studioJobsTable.id });
     if (!completed) throw new PermanentJobError("Generation was cancelled before the MP4 was saved.");
-    await tx.update(studioProjectsTable).set({ status: "video_ready", updatedAt: new Date() }).where(eq(studioProjectsTable.id, project.id));
+    await tx.update(studioProjectsTable).set({ status: "complete", updatedAt: new Date() }).where(eq(studioProjectsTable.id, project.id));
   });
 }
 

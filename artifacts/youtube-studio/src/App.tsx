@@ -276,29 +276,89 @@ function JobsPage() {
 }
 
 function PublishingPage() {
-  const status = useGetYouTubeStatus(); const analytics = useGetYouTubeAnalytics();
+  const status = useGetYouTubeStatus();
+  const analytics = useGetYouTubeAnalytics();
+  const projects = useListStudioProjects();
+  const jobs = useListStudioJobs({}, { query: { refetchInterval: 5000 } });
+  const client = useQueryClient();
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadDescription, setUploadDescription] = useState("");
+  const [privacyStatus, setPrivacyStatus] = useState<"private" | "unlisted" | "public">("private");
+  const [uploading, setUploading] = useState(false);
+  const completedProjects = (projects.data ?? []).filter((project) => project.status === "complete");
+  const selectedProject = completedProjects.find((project) => project.id === selectedProjectId);
+  const uploadJobs = (jobs.data ?? []).filter((job) => job.type === "youtube_upload").slice(0, 5);
+
+  useEffect(() => {
+    if (selectedProject && !uploadTitle.trim()) setUploadTitle(selectedProject.title.slice(0, 100));
+  }, [selectedProjectId, selectedProject?.title]);
+
   const disconnect = async () => {
-    if (!window.confirm('Disconnect YouTube and remove the saved encrypted refresh token?')) return;
+    if (!window.confirm("Disconnect YouTube and remove the saved encrypted refresh token?")) return;
     setConnectionError(null);
     try {
-      const response = await fetch(`${basePath}/api/studio/youtube/connection`, { method: 'DELETE', credentials: 'same-origin' });
-      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || `Request failed (${response.status}).`);
+      const response = await fetch(basePath + "/api/studio/youtube/connection", { method: "DELETE", credentials: "same-origin" });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || "Request failed (" + response.status + ").");
       await Promise.all([status.refetch(), analytics.refetch()]);
     } catch (error) {
-      setConnectionError(error instanceof Error ? error.message : 'Could not disconnect the channel.');
+      setConnectionError(error instanceof Error ? error.message : "Could not disconnect the channel.");
     }
   };
-  const callbackStatus = new URLSearchParams(window.location.search).get('youtube');
-  const callbackMessage = callbackStatus === 'connected' ? 'YouTube confirmed the channel connection.' :
-    callbackStatus && callbackStatus !== 'error' ? `YouTube connection was not completed (${callbackStatus.replaceAll('-', ' ')}).` : null;
-  return <><PageHeading eyebrow="DISTRIBUTION / YOUTUBE" title="Publishing, without guesswork." description="Connection and analytics are read from your authorized channel. This studio never implies an upload that did not happen." />
+  const submitUpload = async (event: FormEvent) => {
+    event.preventDefault();
+    setUploadError(null);
+    setUploadMessage(null);
+    if (!selectedProjectId || !selectedProject) { setUploadError("Choose a project with a completed MP4 first."); return; }
+    if (privacyStatus === "public" && !window.confirm("This uploads the video as PUBLIC and it may become visible on your channel. Continue?")) return;
+    setUploading(true);
+    try {
+      const response = await fetch(basePath + "/api/studio/projects/" + selectedProjectId + "/youtube-upload", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: uploadTitle.trim() || selectedProject.title, description: uploadDescription, privacyStatus }),
+      });
+      const data = await response.json().catch(() => ({})) as { id?: string; error?: string };
+      if (!response.ok) throw new Error(data.error || "Request failed (" + response.status + ").");
+      setUploadMessage("Upload job queued (" + String(data.id || "saved") + "). Status refreshes below. If Google rejects upload permission, refresh channel permissions and retry.");
+      await Promise.all([
+        status.refetch(),
+        client.invalidateQueries({ queryKey: getListStudioJobsQueryKey({}) }),
+        client.invalidateQueries({ queryKey: getGetStudioOverviewQueryKey() }),
+      ]);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Could not queue the YouTube upload.");
+    } finally { setUploading(false); }
+  };
+
+  const callbackStatus = new URLSearchParams(window.location.search).get("youtube");
+  const callbackMessage = callbackStatus === "connected" ? "YouTube confirmed the channel connection." :
+    callbackStatus && callbackStatus !== "error" ? "YouTube connection was not completed (" + callbackStatus.replaceAll("-", " ") + ")." : null;
+  return <><PageHeading eyebrow="DISTRIBUTION / YOUTUBE" title="Publishing, without guesswork." description="Connect your channel, review privacy settings, and explicitly approve each upload." />
     <QueryState loading={status.isLoading || analytics.isLoading} error={status.error || analytics.error} retry={() => { status.refetch(); analytics.refetch(); }}>
-      <section className="youtube-connect"><div className="youtube-emblem"><Send size={22} /></div><div className="youtube-copy"><span className="eyebrow">CHANNEL CONNECTION</span><h2>{status.data?.connected ? status.data.channelTitle || 'YouTube channel connected' : 'Your channel is not connected.'}</h2><p>{status.data?.detail || 'The API has not reported YouTube OAuth status.'}</p></div><div className={`connection-state ${status.data?.connected ? 'connected' : ''}`}><i />{status.data?.connected ? 'CONNECTED' : status.data?.configured ? 'NOT CONNECTED' : 'NOT CONFIGURED'}</div>{status.data?.configured && !status.data.connected && <a className="button button-primary" href={`${basePath}/api/studio/youtube/connect`}>Connect channel <ArrowRight size={15} /></a>}{status.data?.connected && <Button variant="soft" onClick={disconnect}>Disconnect</Button>}</section>
-      {callbackMessage && <p className={callbackStatus === 'connected' ? 'backup-message' : 'inline-error'} role="status">{callbackMessage}</p>}
+      <section className="youtube-connect"><div className="youtube-emblem"><Send size={22} /></div><div className="youtube-copy"><span className="eyebrow">CHANNEL CONNECTION</span><h2>{status.data?.connected ? status.data.channelTitle || "YouTube channel connected" : "Your channel is not connected."}</h2><p>{status.data?.detail || "The API has not reported YouTube OAuth status."}</p></div><div className={"connection-state " + (status.data?.connected ? "connected" : "")}><i />{status.data?.connected ? "CONNECTED" : status.data?.configured ? "NOT CONNECTED" : "NOT CONFIGURED"}</div>{status.data?.configured && !status.data.connected && <a className="button button-primary" href={basePath + "/api/studio/youtube/connect"}>Connect channel <ArrowRight size={15} /></a>}{status.data?.connected && <><a className="subtle-link" href={basePath + "/api/studio/youtube/connect"}>Refresh channel permissions</a><Button variant="soft" onClick={disconnect}>Disconnect</Button></>}</section>
+      {callbackMessage && <p className={callbackStatus === "connected" ? "backup-message" : "inline-error"} role="status">{callbackMessage}</p>}
       {connectionError && <p className="inline-error" role="alert">{connectionError}</p>}
-      <section className="section-block analytics-section"><div className="section-heading"><div><span className="eyebrow">CHANNEL ANALYTICS</span><h2>Real channel numbers only.</h2></div><ShieldCheck size={18} /></div>{analytics.data?.available ? <div className="analytics-grid">{[{ label: 'Views', value: analytics.data.views?.toLocaleString() ?? '—' }, { label: 'Subscribers', value: analytics.data.subscribers?.toLocaleString() ?? '—' }, { label: 'Estimated revenue', value: analytics.data.estimatedRevenue === null ? '—' : `${analytics.data.currency || ''} ${analytics.data.estimatedRevenue}` }].map((m) => <div className="analytic-card" key={m.label}><span>{m.label}</span><b>{m.value}</b><small>Reported by YouTube API</small></div>)}</div> : <div className="analytics-unavailable"><CloudOff size={19} /><div><b>Analytics are unavailable</b><p>{analytics.data?.detail || 'No authorized YouTube analytics are currently available.'}</p></div></div>}</section>
-      <div className="upload-truth"><div className="truth-icon"><ShieldCheck size={18} /></div><div><b>Uploads require explicit approval.</b><p>The available API does not expose a supported YouTube upload action here. Nothing has been uploaded, and no upload control is shown.</p></div></div>
+      <section className="section-block analytics-section"><div className="section-heading"><div><span className="eyebrow">CHANNEL ANALYTICS</span><h2>Real channel numbers only.</h2></div><ShieldCheck size={18} /></div>{analytics.data?.available ? <div className="analytics-grid">{[{ label: "Views", value: analytics.data.views?.toLocaleString() ?? "—" }, { label: "Subscribers", value: analytics.data.subscribers?.toLocaleString() ?? "—" }, { label: "Estimated revenue", value: analytics.data.estimatedRevenue === null ? "—" : (analytics.data.currency || "") + " " + analytics.data.estimatedRevenue }].map((m) => <div className="analytic-card" key={m.label}><span>{m.label}</span><b>{m.value}</b><small>Reported by YouTube API</small></div>)}</div> : <div className="analytics-unavailable"><CloudOff size={19} /><div><b>Analytics are unavailable</b><p>{analytics.data?.detail || "No authorized YouTube analytics are currently available."}</p></div></div>}</section>
+      <section className="section-block"><div className="section-heading"><div><span className="eyebrow">EXPLICIT PUBLISH ACTION</span><h2>Upload a completed MP4</h2></div><Upload size={18} /></div>
+        <p className="field-hint">Only rendered projects can be uploaded. Private is the default; public uploads ask for extra confirmation. Upload permission may require refreshing an older Google grant.</p>
+        <form className="form-stack" onSubmit={submitUpload}>
+          <label>Completed project<select required value={selectedProjectId} onChange={(event) => { setSelectedProjectId(event.target.value); const match = completedProjects.find((p) => p.id === event.target.value); if (match) setUploadTitle(match.title.slice(0, 100)); }}><option value="">Choose a completed MP4…</option>{completedProjects.map((p) => <option key={p.id} value={p.id}>{p.title} · {p.targetMinutes} min</option>)}</select></label>
+          {!completedProjects.length && <p className="field-hint">No completed MP4 is available yet. Generate and render a project first.</p>}
+          <label>YouTube title<input required minLength={1} maxLength={100} value={uploadTitle} onChange={(event) => setUploadTitle(event.target.value)} placeholder="Video title (up to 100 characters)" /></label>
+          <label>Description<textarea maxLength={5000} rows={4} value={uploadDescription} onChange={(event) => setUploadDescription(event.target.value)} placeholder="Description, credits, and links (up to 5,000 characters)" /></label>
+          <label>Visibility<select value={privacyStatus} onChange={(event) => setPrivacyStatus(event.target.value as "private" | "unlisted" | "public")}><option value="private">Private — safest default</option><option value="unlisted">Unlisted — link only</option><option value="public">Public — visible on channel</option></select></label>
+          <div className="dialog-actions"><Button type="submit" disabled={!status.data?.connected || uploading || !selectedProject || !uploadTitle.trim()}>{uploading ? <LoaderCircle className="spin" size={15} /> : <Upload size={15} />} Queue YouTube upload</Button></div>
+        </form>
+        {uploadError && <p className="inline-error" role="alert">{uploadError}</p>}
+        {uploadMessage && <p className="backup-message" role="status">{uploadMessage}</p>}
+        <div className="section-heading"><div><span className="eyebrow">RECENT UPLOAD JOBS</span><h2>Upload status</h2></div><RefreshCw size={17} /></div>
+        {uploadJobs.length ? <div className="scene-timeline">{uploadJobs.map((job) => <article className="scene-row" key={job.id}><div className="scene-number"><Upload size={15} /></div><div className="scene-content"><div className="scene-title-row"><h3>{job.message}</h3><StatusTag status={job.status} /></div><p>{job.error || "Job status refreshes automatically."}</p></div><span className="project-meta">{job.progress}%</span></article>)}</div> : <p className="field-hint">No upload jobs have been submitted yet.</p>}
+      </section>
     </QueryState>
   </>;
 }

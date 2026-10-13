@@ -11,7 +11,7 @@ This is a single-owner Hindi/Hinglish YouTube story studio. It stores projects i
 - MP4 export using animated scene stills, scene headings and script captions; optional ComfyUI still-image generation and Piper narration; owner-only MP4 download.
 - Ollama story and scene-breakdown jobs, enabled only when a matching local model is installed and reachable. Generated scripts/scenes must pass output structure and length checks before they are saved as successful.
 - JSON export and transactional restore for project, scene, and character records.
-- Optional Google YouTube OAuth connection and authorized channel statistics / estimated-revenue queries. Refresh tokens are AES-GCM encrypted server-side.
+- Optional Google YouTube OAuth connection, authorized channel statistics / estimated-revenue queries, and user-approved resumable MP4 uploads. Refresh tokens are AES-GCM encrypted server-side.
 
 The MP4 pipeline does not yet generate true video-diffusion/3D clips, use uploaded character-reference images, lip-sync characters, mix music/SFX, create thumbnails, convert projects into Shorts, or upload finished videos to YouTube. ComfyUI still-image generation and Piper narration are optional and work only when correctly configured. If those optional engines are absent, the pipeline creates a storyboard-card MP4 and reports missing artwork/narration honestly. The final MP4 is stored under `STUDIO_MEDIA_DIR` (default `./data/studio-media`); configure persistent storage on your host to keep it across restarts/redeployments.
 
@@ -61,7 +61,7 @@ STUDIO_FFMPEG_BIN=ffmpeg
 STUDIO_MEDIA_DIR=/absolute/path/to/persistent/studio-media
 ```
 
-No model is downloaded automatically. Check model license, language support, storage and memory needs. Current output is pan/zoom-animated stills, not true 3D animation or generative video. Lip-sync, music/SFX, thumbnail generation and YouTube uploads are not yet implemented.
+No model is downloaded automatically. Check model license, language support, storage and memory needs. Current output is pan/zoom-animated stills, not true 3D animation or generative video. Lip-sync, music/SFX and thumbnail generation are not yet implemented.
 
 ## YouTube channel connection
 
@@ -73,7 +73,7 @@ YOUTUBE_CLIENT_SECRET
 YOUTUBE_REDIRECT_URI=https://<your-host>/api/studio/youtube/callback
 ```
 
-Register that exact redirect URI in the Google OAuth client. The owner must approve channel read and analytics scopes in the Google consent flow. The current build does not request an upload scope and cannot upload videos. Analytics only appear when YouTube authorizes them; estimated revenue can be unavailable for non-monetized channels or accounts without the required permission.
+Register that exact redirect URI in the Google OAuth client. The owner must approve channel read and analytics scopes in the Google consent flow. The app requests YouTube upload permission as well as analytics scopes. The owner selects a completed MP4, title, description and visibility and explicitly queues each upload. A previously connected channel may need to refresh its Google grant so the new upload scope is allowed. Interrupted transfers are marked failed rather than blindly retried because the upload might already have reached YouTube. Analytics only appear when authorized; estimated revenue can be unavailable for non-monetized channels or accounts without the required permission.
 
 The Google OAuth refresh token is stored encrypted in the owner row. Encryption derives from `SESSION_SECRET`; retain the same secret across backups and VPS migration or reconnect the channel. OAuth credentials and tokens are never sent to the browser. No live Google account or API quota was available to verify this integration in the current environment.
 

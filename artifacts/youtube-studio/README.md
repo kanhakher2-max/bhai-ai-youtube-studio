@@ -13,7 +13,7 @@ This is a single-owner Hindi/Hinglish YouTube story studio. It stores projects i
 - JSON export and transactional restore for project, scene, and character records.
 - Optional Google YouTube OAuth connection, authorized channel statistics / estimated-revenue queries, and user-approved resumable MP4 uploads. Refresh tokens are AES-GCM encrypted server-side.
 
-The MP4 pipeline does not yet generate true video-diffusion/3D clips, use uploaded character-reference images, lip-sync characters, mix music/SFX, create thumbnails, convert projects into Shorts, or upload finished videos to YouTube. ComfyUI still-image generation and Piper narration are optional and work only when correctly configured. If those optional engines are absent, the pipeline creates a storyboard-card MP4 and reports missing artwork/narration honestly. The final MP4 is stored under `STUDIO_MEDIA_DIR` (default `./data/studio-media`); configure persistent storage on your host to keep it across restarts/redeployments.
+The MP4 pipeline does not yet generate true video-diffusion/3D clips, use uploaded character-reference images, lip-sync characters, mix music/SFX, create thumbnails, or convert projects into Shorts. ComfyUI still-image generation and Piper narration are optional and work only when correctly configured. If those optional engines are absent, the pipeline creates a storyboard-card MP4 and reports missing artwork/narration honestly. The final MP4 is stored under `STUDIO_MEDIA_DIR` (default `./data/studio-media`); configure persistent storage on your host to keep it across restarts/redeployments.
 
 ## Replit operation
 
@@ -36,7 +36,7 @@ STUDIO_OLLAMA_MODEL=<the exact installed model tag>
 
 Do not expose Ollama's unauthenticated port to the public internet. When Ollama runs on another machine, put it behind a private network or authenticated TLS reverse proxy. Pin the exact model tag and record the model source/version or digest in your own deployment manifest; the app does not pull, update, or verify weights. The health page checks that the service responds and that the exact model name is present. It does not certify model quality, license, or GPU compatibility.
 
-Hardware depends on the selected model, quantization, context size, and generation speed. As a planning estimate, a 7–8B quantized text model often needs roughly 5–8 GB of available memory for weights and more memory for runtime/context; 16 GB system RAM is a practical starting point, while a supported GPU with sufficient VRAM improves throughput. CPU inference may work but can be slow for long scripts. Check the chosen model's own hardware guidance before downloading it. Images, video, and voice have no working generation adapter in this build.
+Hardware depends on the selected model, quantization, context size, and generation speed. As a planning estimate, a 7–8B quantized text model often needs roughly 5–8 GB of available memory for weights and more memory for runtime/context; 16 GB system RAM is a practical starting point, while a supported GPU with sufficient VRAM improves throughput. CPU inference may work but can be slow for long scripts. Check the chosen model's own hardware guidance before downloading it. ComfyUI still-image generation and Piper voice narration are optional adapters when configured; true generative video is not implemented.
 
 ## Local media rendering setup
 
@@ -73,7 +73,7 @@ YOUTUBE_CLIENT_SECRET
 YOUTUBE_REDIRECT_URI=https://<your-host>/api/studio/youtube/callback
 ```
 
-Register that exact redirect URI in the Google OAuth client. The owner must approve channel read and analytics scopes in the Google consent flow. The app requests YouTube upload permission as well as analytics scopes. The owner selects a completed MP4, title, description and visibility and explicitly queues each upload. A previously connected channel may need to refresh its Google grant so the new upload scope is allowed. Interrupted transfers are marked failed rather than blindly retried because the upload might already have reached YouTube. Analytics only appear when authorized; estimated revenue can be unavailable for non-monetized channels or accounts without the required permission.
+Register that exact redirect URI in the Google OAuth client. The owner must approve channel-read, upload and analytics scopes in the Google consent flow. The app requests YouTube upload permission as well as analytics scopes. The owner selects a completed MP4, title, description and visibility and explicitly queues each upload. A previously connected channel may need to refresh its Google grant so the new upload scope is allowed. Interrupted transfers are marked failed rather than blindly retried because the upload might already have reached YouTube. Analytics only appear when authorized; estimated revenue can be unavailable for non-monetized channels or accounts without the required permission.
 
 The Google OAuth refresh token is stored encrypted in the owner row. Encryption derives from `SESSION_SECRET`; retain the same secret across backups and VPS migration or reconnect the channel. OAuth credentials and tokens are never sent to the browser. No live Google account or API quota was available to verify this integration in the current environment.
 
@@ -88,11 +88,11 @@ pg_dump --format=custom --no-owner "$DATABASE_URL" > studio-$(date +%F).dump
 pg_restore --clean --if-exists --no-owner --dbname="$DATABASE_URL" studio-YYYY-MM-DD.dump
 ```
 
-Store backups outside the application checkout, encrypt them at rest, and test restores on a separate database. The app currently has no media storage directory or asset-file backup contract.
+Store backups outside the application checkout, encrypt them at rest, and test restores on a separate database. The JSON backup omits rendered media files and job history. Keep `STUDIO_MEDIA_DIR` on persistent storage and back up its MP4 files separately; a database backup alone does not include those files.
 
 ## Replit-to-Linux-VPS migration
 
-1. Prepare a supported Linux host with Node.js 24, pnpm, PostgreSQL, and a reverse proxy with HTTPS. FFmpeg can be installed for future rendering work, but this build has no render job.
+1. Prepare a supported Linux host with Node.js 24, pnpm, PostgreSQL, FFmpeg (with H.264/AAC support), a readable font, and a reverse proxy with HTTPS. Configure persistent storage for `STUDIO_MEDIA_DIR`.
 2. Clone the project and install the workspace dependencies with `pnpm install`.
 3. Create an empty PostgreSQL database and set `DATABASE_URL`.
 4. Set a long random `SESSION_SECRET`; keep it stable for encrypted OAuth-token recovery. Configure an authentication provider. The current Clerk tenant is Replit-managed, so VPS deployment requires replacing Clerk middleware/client configuration with an owner-controlled compatible provider; this migration adapter is not included yet.

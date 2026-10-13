@@ -134,6 +134,76 @@ paths:
       responses:
         "204":
           description: Project deleted
+  /studio/projects/{id}/video:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: downloadStudioProjectVideo
+      tags: [studio]
+      summary: Download a rendered MP4 for a completed project
+      responses:
+        "200":
+          description: Rendered MP4 file
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Project or stored MP4 file not found
+        "409":
+          description: Project does not have a completed render
+  /studio/projects/{id}/youtube-upload:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: queueYouTubeUpload
+      tags: [youtube]
+      summary: Queue an explicitly approved upload of a completed MP4
+      description: Requires a connected YouTube account with the upload scope. Public visibility should only be selected after the owner reviews the title, description, and privacy setting.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                description:
+                  type: string
+                  maxLength: 5000
+                  default: ""
+                privacyStatus:
+                  type: string
+                  enum: [private, unlisted, public]
+                  default: private
+      responses:
+        "202":
+          description: Upload job queued; the actual upload result is recorded on the job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioJob"
+        "404":
+          description: Project or rendered MP4 not found
+        "409":
+          description: Project render or YouTube connection is not ready
+        "429":
+          description: Upload rate limit or queue limit reached
   /studio/projects/{id}/scenes:
     parameters:
       - name: id

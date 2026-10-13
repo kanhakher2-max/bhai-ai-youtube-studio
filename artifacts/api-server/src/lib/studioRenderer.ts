@@ -19,8 +19,10 @@ type ComfyImage = { filename?: string; subfolder?: string; type?: string };
 type ComfyHistory = Record<string, { outputs?: Record<string, { images?: ComfyImage[] }>; status?: { status_str?: string } }>;
 export type StudioRenderResult = {
   outputPath: string;
+  thumbnailPath: string | null;
   mode: "comfyui-stills" | "storyboard-cards";
   hasNarration: boolean;
+  hasMusic: boolean;
   warnings: string[];
 };
 
@@ -45,6 +47,10 @@ function mediaDir(): string { return path.resolve(process.env.STUDIO_MEDIA_DIR |
 export function studioVideoPath(projectId: string): string {
   if (!/^[0-9a-f-]{36}$/iu.test(projectId)) throw new Error("Invalid project ID.");
   return path.join(mediaDir(), projectId + ".mp4");
+}
+export function studioThumbnailPath(projectId: string): string {
+  if (!/^[0-9a-f-]{36}$/iu.test(projectId)) throw new Error("Invalid project ID.");
+  return path.join(mediaDir(), projectId + ".jpg");
 }
 function wait(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -185,9 +191,17 @@ export async function renderStudioVideo(input: {
   const imageEnabled = Boolean(process.env.STUDIO_COMFY_IMAGE_WORKFLOW?.trim() && process.env.STUDIO_COMFY_PROMPT_NODE_ID?.trim());
   const voiceEnabled = await piperAvailable();
   const warnings: string[] = [];
+  let musicFile: string | null = null;
+  const configuredMusic = process.env.STUDIO_MUSIC_FILE?.trim();
+  if (configuredMusic) {
+    const candidate = path.resolve(configuredMusic);
+    try { await access(candidate, constants.R_OK); musicFile = candidate; }
+    catch { warnings.push("STUDIO_MUSIC_FILE is configured but unreadable; no background music was added."); }
+  }
+  if (!musicFile) warnings.push("No local music bed is configured; the MP4 contains narration or silence only.");
   if (!imageEnabled) warnings.push("ComfyUI workflow is not configured; scene cards were used instead of generated artwork.");
   if (!voiceEnabled) warnings.push("Piper voice model is not configured/readable; no narration audio was added.");
-  warnings.push("Renderer animates still artwork; true 3D/video-diffusion clips, lip-sync, music and SFX are not implemented.");
+  warnings.push("Renderer animates still artwork; true 3D/video-diffusion clips, lip-sync, and generated sound effects are not implemented.");
   try {
     const concatPath = path.join(work, "concat.txt");
     const clips: string[] = [];
@@ -220,10 +234,38 @@ export async function renderStudioVideo(input: {
     await writeFile(concatPath, clips.join("\n") + "\n", "utf8");
     const temporary = path.join(work, "final.mp4");
     await run(ffmpeg, ["-y", "-f", "concat", "-safe", "0", "-i", concatPath, "-c", "copy", "-movflags", "+faststart", temporary], input.signal, undefined, 300_000);
-    if ((await stat(temporary)).size < 1_024) throw new Error("FFmpeg created an unexpectedly small MP4.");
-    await rename(temporary, outputPath);
+    const totalSeconds = input.scenes.reduce((total, scene) => total + Math.max(1, Math.min(600, Math.round(scene.durationSeconds))), 0);
+    let finalCandidate = temporary;
+    if (musicFile) {
+      const mixed = path.join(work, "final-with-music.mp4");
+      const configuredVolume = Number(process.env.STUDIO_MUSIC_VOLUME);
+      const musicVolume = process.env.STUDIO_MUSIC_VOLUME?.trim() && Number.isFinite(configuredVolume)
+        ? Math.min(0.5, Math.max(0, configuredVolume))
+        : 0.12;
+      await run(ffmpeg, ["-y", "-i", temporary, "-stream_loop", "-1", "-i", musicFile,
+        "-filter_complex", "[0:a:0]volume=1.0[base];[1:a:0]volume=" + musicVolume.toFixed(3) + "[music];[base][music]amix=inputs=2:duration=first:dropout_transition=2[outa]",
+        "-map", "0:v:0", "-map", "[outa]", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k",
+        "-t", String(totalSeconds), "-movflags", "+faststart", mixed], input.signal, undefined, 300_000);
+      finalCandidate = mixed;
+      warnings.push("A local soundtrack was mixed under the narration at volume " + musicVolume.toFixed(2) + ".");
+    }
+    if ((await stat(finalCandidate)).size < 1_024) throw new Error("FFmpeg created an unexpectedly small MP4.");
+    await rename(finalCandidate, outputPath);
+    const thumbnailPath = studioThumbnailPath(input.projectId);
+    await rm(thumbnailPath, { force: true }).catch(() => undefined);
+    let savedThumbnail: string | null = null;
+    try {
+      const thumbCandidate = path.join(work, "thumbnail.jpg");
+      await run(ffmpeg, ["-y", "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbCandidate], input.signal, undefined, 30_000);
+      if ((await stat(thumbCandidate)).size >= 1_024) {
+        await rename(thumbCandidate, thumbnailPath);
+        savedThumbnail = thumbnailPath;
+      } else warnings.push("FFmpeg output a thumbnail that was too small to use.");
+    } catch (error) {
+      warnings.push("Automatic thumbnail export failed: " + (error instanceof Error ? error.message.slice(0, 120) : "unknown error"));
+    }
     if (imageEnabled && !warnings.some((item) => item.includes("image generation failed"))) warnings.push("ComfyUI generated scene stills and FFmpeg added pan/zoom movement.");
-    return { outputPath, mode: imageEnabled ? "comfyui-stills" : "storyboard-cards", hasNarration: narrated > 0, warnings: [...new Set(warnings)].slice(0, 30) };
+    return { outputPath, thumbnailPath: savedThumbnail, mode: imageEnabled ? "comfyui-stills" : "storyboard-cards", hasNarration: narrated > 0, hasMusic: Boolean(musicFile), warnings: [...new Set(warnings)].slice(0, 30) };
   } finally {
     await rm(work, { recursive: true, force: true }).catch(() => undefined);
   }

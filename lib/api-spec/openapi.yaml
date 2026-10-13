@@ -158,6 +158,30 @@ paths:
           description: Project or stored MP4 file not found
         "409":
           description: Project does not have a completed render
+  /studio/projects/{id}/thumbnail:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: downloadStudioProjectThumbnail
+      tags: [studio]
+      summary: Download the generated first-frame JPEG thumbnail for a completed video
+      responses:
+        "200":
+          description: JPEG thumbnail file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Project or stored thumbnail file not found
+        "409":
+          description: Project does not have a completed render
   /studio/projects/{id}/youtube-upload:
     parameters:
       - name: id

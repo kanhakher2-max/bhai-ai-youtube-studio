@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
-import { renderStudioVideo, studioVideoPath } from "./studioRenderer";
+import { renderStudioVideo, studioThumbnailPath, studioVideoPath } from "./studioRenderer";
 
 test("video path is placed inside the configured media directory", () => {
   const previous = process.env.STUDIO_MEDIA_DIR;
@@ -19,6 +19,17 @@ test("video path is placed inside the configured media directory", () => {
 
 test("video path rejects arbitrary filesystem paths", () => {
   assert.throws(() => studioVideoPath("../../etc/passwd"), /Invalid project ID/u);
+  assert.throws(() => studioThumbnailPath("../../etc/passwd"), /Invalid project ID/u);
+});
+
+test("thumbnail path stays beside the matching project's MP4", () => {
+  const previous = process.env.STUDIO_MEDIA_DIR;
+  process.env.STUDIO_MEDIA_DIR = "/tmp/bhai-studio-test-media";
+  try {
+    assert.equal(studioThumbnailPath("12345678-1234-4234-8234-123456789abc"), path.join("/tmp/bhai-studio-test-media", "12345678-1234-4234-8234-123456789abc.jpg"));
+  } finally {
+    if (previous === undefined) delete process.env.STUDIO_MEDIA_DIR; else process.env.STUDIO_MEDIA_DIR = previous;
+  }
 });
 
 
@@ -55,6 +66,8 @@ test("renderer produces a probeable MP4 from a one-scene storyboard", async (t) 
     prompt: process.env.STUDIO_COMFY_PROMPT_NODE_ID,
     piperBin: process.env.STUDIO_PIPER_BIN,
     piperModel: process.env.STUDIO_PIPER_MODEL,
+    musicFile: process.env.STUDIO_MUSIC_FILE,
+    musicVolume: process.env.STUDIO_MUSIC_VOLUME,
   };
   process.env.STUDIO_MEDIA_DIR = dir;
   process.env.STUDIO_FONT_FILE = font;
@@ -62,6 +75,10 @@ test("renderer produces a probeable MP4 from a one-scene storyboard", async (t) 
   delete process.env.STUDIO_COMFY_PROMPT_NODE_ID;
   delete process.env.STUDIO_PIPER_BIN;
   delete process.env.STUDIO_PIPER_MODEL;
+  const musicFile = path.join(dir, "test-music.wav");
+  execFileSync(process.env.STUDIO_FFMPEG_BIN || "ffmpeg", ["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-c:a", "pcm_s16le", musicFile], { stdio: "ignore" });
+  process.env.STUDIO_MUSIC_FILE = musicFile;
+  process.env.STUDIO_MUSIC_VOLUME = "0.10";
   const projectId = randomUUID();
   try {
     const result = await renderStudioVideo({
@@ -80,10 +97,13 @@ test("renderer produces a probeable MP4 from a one-scene storyboard", async (t) 
     });
     assert.equal(result.mode, "storyboard-cards");
     assert.equal(result.hasNarration, false);
+    assert.equal(result.hasMusic, true);
+    assert.equal(result.thumbnailPath, studioThumbnailPath(projectId));
     assert.ok(result.warnings.some((warning) => warning.includes("ComfyUI")));
     const filePath = result.outputPath;
     assert.equal(filePath, studioVideoPath(projectId));
     assert.ok((await stat(filePath)).size > 1_024);
+    assert.ok((await stat(result.thumbnailPath!)).size > 1_024);
     const duration = Number(execFileSync("ffprobe", [
       "-v", "error", "-show_entries", "format=duration",
       "-of", "default=noprint_wrappers=1:nokey=1", filePath,
@@ -96,6 +116,8 @@ test("renderer produces a probeable MP4 from a one-scene storyboard", async (t) 
     if (saved.prompt === undefined) delete process.env.STUDIO_COMFY_PROMPT_NODE_ID; else process.env.STUDIO_COMFY_PROMPT_NODE_ID = saved.prompt;
     if (saved.piperBin === undefined) delete process.env.STUDIO_PIPER_BIN; else process.env.STUDIO_PIPER_BIN = saved.piperBin;
     if (saved.piperModel === undefined) delete process.env.STUDIO_PIPER_MODEL; else process.env.STUDIO_PIPER_MODEL = saved.piperModel;
+    if (saved.musicFile === undefined) delete process.env.STUDIO_MUSIC_FILE; else process.env.STUDIO_MUSIC_FILE = saved.musicFile;
+    if (saved.musicVolume === undefined) delete process.env.STUDIO_MUSIC_VOLUME; else process.env.STUDIO_MUSIC_VOLUME = saved.musicVolume;
     await rm(dir, { recursive: true, force: true });
   }
 });

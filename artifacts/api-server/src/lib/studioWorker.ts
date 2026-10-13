@@ -493,6 +493,8 @@ async function runFullVideoJob(
           outputFile: renderResult.outputPath.split(/[\\/]/u).pop(),
           renderMode: renderResult.mode,
           hasNarration: renderResult.hasNarration,
+          hasMusic: renderResult.hasMusic,
+          thumbnailPath: renderResult.thumbnailPath ? path.basename(renderResult.thumbnailPath) : null,
           warnings: renderResult.warnings,
         },
         updatedAt: new Date(),

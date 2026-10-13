@@ -8,12 +8,12 @@ This is a single-owner Hindi/Hinglish YouTube story studio. It stores projects i
 - Persisted projects, editable scripts, scene breakdowns, and reusable text character profiles.
 - A PostgreSQL-backed job queue with cancellation, bounded transient retries, and recovery of interrupted work after API restart.
 - Local-engine health checks for Ollama, ComfyUI, FFmpeg, Piper, and optional Google OAuth settings.
-- MP4 export using animated scene stills, scene headings and script captions; optional ComfyUI still-image generation and Piper narration; owner-only MP4 download.
+- MP4 export using animated scene stills, scene headings and script captions; optional ComfyUI still-image generation, Piper narration, and a local soundtrack file; owner-only MP4 and automatic first-frame JPEG thumbnail downloads.
 - Ollama story and scene-breakdown jobs, enabled only when a matching local model is installed and reachable. Generated scripts/scenes must pass output structure and length checks before they are saved as successful.
 - JSON export and transactional restore for project, scene, and character records.
 - Optional Google YouTube OAuth connection, authorized channel statistics / estimated-revenue queries, and user-approved resumable MP4 uploads. Refresh tokens are AES-GCM encrypted server-side.
 
-The MP4 pipeline does not yet generate true video-diffusion/3D clips, use uploaded character-reference images, lip-sync characters, mix music/SFX, create thumbnails, or convert projects into Shorts. ComfyUI still-image generation and Piper narration are optional and work only when correctly configured. If those optional engines are absent, the pipeline creates a storyboard-card MP4 and reports missing artwork/narration honestly. The final MP4 is stored under `STUDIO_MEDIA_DIR` (default `./data/studio-media`); configure persistent storage on your host to keep it across restarts/redeployments.
+The MP4 pipeline does not yet generate true video-diffusion/3D clips, use uploaded character-reference images, lip-sync characters, synthesize original music/SFX, or convert an existing landscape project into a vertical Short. A user-supplied local soundtrack can be mixed at low volume, and the renderer exports a JPEG thumbnail from the finished MP4. ComfyUI still-image generation and Piper narration are optional and work only when correctly configured. If those optional engines are absent, the pipeline creates a storyboard-card MP4 and reports missing artwork/narration honestly. The final MP4 is stored under `STUDIO_MEDIA_DIR` (default `./data/studio-media`); configure persistent storage on your host to keep it across restarts/redeployments.
 
 ## Replit operation
 
@@ -57,11 +57,13 @@ Optional Piper narration and media output location use:
 ```text
 STUDIO_PIPER_BIN=/absolute/path/to/piper
 STUDIO_PIPER_MODEL=/absolute/path/to/voice.onnx
+STUDIO_MUSIC_FILE=/absolute/path/to/royalty-cleared-background-music.wav
+STUDIO_MUSIC_VOLUME=0.12
 STUDIO_FFMPEG_BIN=ffmpeg
 STUDIO_MEDIA_DIR=/absolute/path/to/persistent/studio-media
 ```
 
-No model is downloaded automatically. Check model license, language support, storage and memory needs. Current output is pan/zoom-animated stills, not true 3D animation or generative video. Lip-sync, music/SFX and thumbnail generation are not yet implemented.
+No model is downloaded automatically. Check model license, language support, storage and memory needs. Use a soundtrack file you have rights to use; it loops under the rendered video's narration and `STUDIO_MUSIC_VOLUME` defaults to 0.12 (maximum accepted value 0.5). Current output is pan/zoom-animated stills, not true 3D animation or generative video. Original AI music/SFX generation and lip-sync are not implemented; the first-frame JPEG thumbnail is generated from the finished MP4.
 
 ## YouTube channel connection
 

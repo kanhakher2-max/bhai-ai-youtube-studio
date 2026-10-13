@@ -157,14 +157,14 @@ async function renderClip(input: {
   if (image) args.push("-loop", "1", "-framerate", "24", "-i", image);
   else args.push("-f", "lavfi", "-i", "color=c=" + ["0x172b4d","0x173b3f","0x3a244b","0x4a2b27","0x223748","0x30334d"][index % 6] + ":s=" + width + "x" + height + ":r=24");
   if (wav) args.push("-i", wav);
+  else args.push("-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100");
   const filters = ["scale=" + width + ":" + height + ":force_original_aspect_ratio=increase", "crop=" + width + ":" + height];
   if (image) filters.push("zoompan=z='min(zoom+0.00025,1.08)':d=1:s=" + width + "x" + height + ":fps=24");
   const escapedFont = esc(font), title = esc(titlePath), body = esc(bodyPath);
   filters.push("drawtext=fontfile='" + escapedFont + "':textfile='" + title + "':fontcolor=white:fontsize=" + (width > height ? 46 : 34) + ":x=(w-text_w)/2:y=h*0.12:box=1:boxcolor=black@0.5:boxborderw=20");
   filters.push("drawtext=fontfile='" + escapedFont + "':textfile='" + body + "':fontcolor=white:fontsize=" + (width > height ? 31 : 26) + ":line_spacing=10:x=(w-text_w)/2:y=h*0.34:box=1:boxcolor=black@0.6:boxborderw=18");
   args.push("-vf", filters.join(","), "-t", String(seconds), "-r", "24", "-c:v", "libx264", "-preset", "veryfast", "-crf", "24", "-pix_fmt", "yuv420p", "-map", "0:v:0");
-  if (wav) args.push("-map", "1:a:0", "-af", "apad", "-t", String(seconds), "-c:a", "aac", "-b:a", "128k");
-  else args.push("-an");
+  args.push("-map", "1:a:0", "-af", "apad", "-t", String(seconds), "-c:a", "aac", "-b:a", "128k");
   args.push("-movflags", "+faststart", output);
   await run(process.env.STUDIO_FFMPEG_BIN || "ffmpeg", args, signal, undefined, Math.max(120_000, (seconds + 60) * 2_000));
 }

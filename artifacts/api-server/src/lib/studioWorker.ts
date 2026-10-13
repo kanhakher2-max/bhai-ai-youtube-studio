@@ -460,7 +460,7 @@ async function runFullVideoJob(
   const renderResult = await renderStudioVideo({
     projectId: project.id,
     aspectRatio: payload.data.aspectRatio,
-    scenes,
+    scenes: scenes.map((scene, index) => ({ ...scene, sequence: index + 1 })),
     signal,
     onProgress: async (completed, total, message) => {
       await ensureNotCancelled(job.id, signal);

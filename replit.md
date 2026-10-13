@@ -41,11 +41,11 @@ A single-owner production desk for developing original Hindi and Hinglish YouTub
 - Jobs are stored in PostgreSQL and resumed after API restart. Retries are bounded; only validated Ollama results are marked successful.
 - Paid model APIs are not used. Local Ollama is opt-in and never downloaded or silently selected by the app.
 - YouTube refresh tokens are encrypted server-side using a key derived from the stable `SESSION_SECRET`. Preserve that secret for channel reconnect-free migration.
-- YouTube upload is not implemented. OAuth currently requests read and analytics scopes only; the UI does not offer a fake upload action.
+- YouTube publishing is implemented as an owner-approved queued workflow for completed MP4s; a connected Google OAuth grant with the upload scope is still required. Live upload was not verified in the development environment.
 
 ## Product
 
-The current working slice provides project/script editing, reusable text character profiles, scene editing, durable story and scene-breakdown jobs, engine health, a JSON data backup/restore flow, and optional YouTube channel connection/authorized analytics. Real story/scene generation requires a reachable, locally installed Ollama model. Image/video generation, voice synthesis, editing/rendering, media files, and YouTube uploading are not implemented yet.
+The current working slice provides project/script editing, reusable text character profiles, scene editing, durable story and scene-breakdown jobs, engine health, a JSON data backup/restore flow, a FFmpeg MP4 renderer, owner-only MP4 and generated JPEG thumbnail downloads, optional local ComfyUI stills and Piper narration, optional user-supplied soundtrack mixing, and an owner-approved YouTube upload queue. Real story/scene generation requires a reachable, locally installed Ollama model; image/voice/music adapters need explicit host configuration. True video-diffusion/3D clips, character-reference consistency, lip-sync and original AI-generated sound effects/music remain unimplemented. The repository CI has a render/ffprobe smoke test; live Replit deployment and real YouTube uploads still need end-to-end verification.
 
 ## User requirements
 
@@ -57,7 +57,7 @@ The current working slice provides project/script editing, reusable text charact
 - The browser talks to the API through same-origin `/api`; do not enable reflective credentialed CORS.
 - The initial owner account is selected by first authenticated API use. Lock down sign-up or place the service behind a trusted access gate before first use on a public host.
 - JSON backup covers project records, scripts, scenes, and characters—not job history, OAuth tokens, model weights, or media files. Keep a separate PostgreSQL backup.
-- YouTube requires a Google OAuth application whose registered callback exactly matches `YOUTUBE_REDIRECT_URI`; public upload approval controls are not shipped.
+- YouTube requires a Google OAuth application whose registered callback exactly matches `YOUTUBE_REDIRECT_URI`; uploads remain explicit owner actions and should be tested private-first.
 - The Replit-managed Clerk setup is not self-hosted authentication. VPS migration requires a compatible authentication provider and corresponding middleware configuration.
 
 ## Pointers

@@ -22,10 +22,13 @@ export type StudioProjectTargetMinutes = typeof StudioProjectTargetMinutes[keyof
 
 
 export const StudioProjectTargetMinutes = {
+  NUMBER_1: 1,
+  NUMBER_3: 3,
   NUMBER_5: 5,
   NUMBER_6: 6,
   NUMBER_7: 7,
   NUMBER_8: 8,
+  NUMBER_10: 10,
 } as const;
 
 export type StudioProjectVisualStyle = typeof StudioProjectVisualStyle[keyof typeof StudioProjectVisualStyle];
@@ -36,6 +39,7 @@ export const StudioProjectVisualStyle = {
   '3d-cartoon': '3d-cartoon',
   anime: 'anime',
   cinematic: 'cinematic',
+  realistic: 'realistic',
 } as const;
 
 export type StudioProjectStatus = typeof StudioProjectStatus[keyof typeof StudioProjectStatus];
@@ -76,10 +80,13 @@ export type StudioProjectInputTargetMinutes = typeof StudioProjectInputTargetMin
 
 
 export const StudioProjectInputTargetMinutes = {
+  NUMBER_1: 1,
+  NUMBER_3: 3,
   NUMBER_5: 5,
   NUMBER_6: 6,
   NUMBER_7: 7,
   NUMBER_8: 8,
+  NUMBER_10: 10,
 } as const;
 
 export type StudioProjectInputVisualStyle = typeof StudioProjectInputVisualStyle[keyof typeof StudioProjectInputVisualStyle];
@@ -90,6 +97,7 @@ export const StudioProjectInputVisualStyle = {
   '3d-cartoon': '3d-cartoon',
   anime: 'anime',
   cinematic: 'cinematic',
+  realistic: 'realistic',
 } as const;
 
 export interface StudioProjectInput {
@@ -100,6 +108,8 @@ export interface StudioProjectInput {
   title: string;
   /** @maxLength 5000 */
   idea: string;
+  /** @maxLength 100000 */
+  scriptText?: string;
   language: StudioProjectInputLanguage;
   /**
      * @minLength 1
@@ -123,10 +133,13 @@ export type StudioProjectUpdateTargetMinutes = typeof StudioProjectUpdateTargetM
 
 
 export const StudioProjectUpdateTargetMinutes = {
+  NUMBER_1: 1,
+  NUMBER_3: 3,
   NUMBER_5: 5,
   NUMBER_6: 6,
   NUMBER_7: 7,
   NUMBER_8: 8,
+  NUMBER_10: 10,
 } as const;
 
 export type StudioProjectUpdateVisualStyle = typeof StudioProjectUpdateVisualStyle[keyof typeof StudioProjectUpdateVisualStyle];
@@ -137,6 +150,7 @@ export const StudioProjectUpdateVisualStyle = {
   '3d-cartoon': '3d-cartoon',
   anime: 'anime',
   cinematic: 'cinematic',
+  realistic: 'realistic',
 } as const;
 
 export interface StudioProjectUpdate {
@@ -172,6 +186,7 @@ export interface StudioScene {
   camera: string;
   visualPrompt: string;
   audioNotes: string;
+  transition: string;
   /** @nullable */
   assetPath: string | null;
   createdAt: string;
@@ -205,6 +220,8 @@ export interface StudioSceneInput {
   visualPrompt?: string;
   /** @maxLength 2000 */
   audioNotes?: string;
+  /** @maxLength 500 */
+  transition?: string;
 }
 
 export interface StudioSceneUpdate {
@@ -234,6 +251,8 @@ export interface StudioSceneUpdate {
   visualPrompt?: string;
   /** @maxLength 2000 */
   audioNotes?: string;
+  /** @maxLength 500 */
+  transition?: string;
 }
 
 export interface StudioCharacter {
@@ -294,10 +313,13 @@ export type StoryGenerationInputTargetMinutes = typeof StoryGenerationInputTarge
 
 
 export const StoryGenerationInputTargetMinutes = {
+  NUMBER_1: 1,
+  NUMBER_3: 3,
   NUMBER_5: 5,
   NUMBER_6: 6,
   NUMBER_7: 7,
   NUMBER_8: 8,
+  NUMBER_10: 10,
 } as const;
 
 export type StoryGenerationInputVisualStyle = typeof StoryGenerationInputVisualStyle[keyof typeof StoryGenerationInputVisualStyle];
@@ -308,6 +330,7 @@ export const StoryGenerationInputVisualStyle = {
   '3d-cartoon': '3d-cartoon',
   anime: 'anime',
   cinematic: 'cinematic',
+  realistic: 'realistic',
 } as const;
 
 export interface StoryGenerationInput {
@@ -326,12 +349,78 @@ export interface StoryGenerationInput {
   visualStyle: StoryGenerationInputVisualStyle;
 }
 
+export type FullVideoInputLanguage = typeof FullVideoInputLanguage[keyof typeof FullVideoInputLanguage];
+
+
+export const FullVideoInputLanguage = {
+  Hindi: 'Hindi',
+  Hinglish: 'Hinglish',
+  English: 'English',
+} as const;
+
+export type FullVideoInputTargetMinutes = typeof FullVideoInputTargetMinutes[keyof typeof FullVideoInputTargetMinutes];
+
+
+export const FullVideoInputTargetMinutes = {
+  NUMBER_1: 1,
+  NUMBER_3: 3,
+  NUMBER_5: 5,
+  NUMBER_8: 8,
+  NUMBER_10: 10,
+} as const;
+
+export type FullVideoInputVisualStyle = typeof FullVideoInputVisualStyle[keyof typeof FullVideoInputVisualStyle];
+
+
+export const FullVideoInputVisualStyle = {
+  '2d': '2d',
+  '3d-cartoon': '3d-cartoon',
+  anime: 'anime',
+  cinematic: 'cinematic',
+  realistic: 'realistic',
+} as const;
+
+export type FullVideoInputAspectRatio = typeof FullVideoInputAspectRatio[keyof typeof FullVideoInputAspectRatio];
+
+
+export const FullVideoInputAspectRatio = {
+  '16:9': '16:9',
+  '9:16': '9:16',
+} as const;
+
+export interface FullVideoInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  title: string;
+  /** @maxLength 5000 */
+  idea?: string;
+  /**
+     * @minLength 100
+     * @maxLength 100000
+     */
+  scriptText: string;
+  language: FullVideoInputLanguage;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  genre: string;
+  targetMinutes: FullVideoInputTargetMinutes;
+  visualStyle: FullVideoInputVisualStyle;
+  aspectRatio: FullVideoInputAspectRatio;
+  /** @maxItems 30 */
+  characterIds?: string[];
+}
+
 export type StudioJobType = typeof StudioJobType[keyof typeof StudioJobType];
 
 
 export const StudioJobType = {
   story: 'story',
   scene_breakdown: 'scene_breakdown',
+  full_video: 'full_video',
   render: 'render',
   youtube_upload: 'youtube_upload',
 } as const;
@@ -364,6 +453,11 @@ export interface StudioJob {
   error: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface FullVideoStart {
+  project: StudioProject;
+  job: StudioJob;
 }
 
 export interface StudioEngine {

@@ -18,6 +18,69 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Create a project and queue its script-to-video workflow
+ */
+export const startStudioFullVideoBodyTitleMax = 160;
+
+export const startStudioFullVideoBodyIdeaMax = 5000;
+
+export const startStudioFullVideoBodyScriptTextMin = 100;
+export const startStudioFullVideoBodyScriptTextMax = 100000;
+
+export const startStudioFullVideoBodyGenreMax = 80;
+
+export const startStudioFullVideoBodyCharacterIdsMax = 30;
+
+
+
+export const StartStudioFullVideoBody = zod.object({
+  "title": zod.string().min(1).max(startStudioFullVideoBodyTitleMax),
+  "idea": zod.string().max(startStudioFullVideoBodyIdeaMax).optional(),
+  "scriptText": zod.string().min(startStudioFullVideoBodyScriptTextMin).max(startStudioFullVideoBodyScriptTextMax),
+  "language": zod.enum(['Hindi', 'Hinglish', 'English']),
+  "genre": zod.string().min(1).max(startStudioFullVideoBodyGenreMax),
+  "targetMinutes": zod.union([zod.literal(1),zod.literal(3),zod.literal(5),zod.literal(8),zod.literal(10)]),
+  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic', 'realistic']),
+  "aspectRatio": zod.enum(['16:9', '9:16']),
+  "characterIds": zod.array(zod.string().uuid()).max(startStudioFullVideoBodyCharacterIdsMax).optional()
+})
+
+export const startStudioFullVideoResponseJobProgressMin = 0;
+export const startStudioFullVideoResponseJobProgressMax = 100;
+
+
+
+export const StartStudioFullVideoResponse = zod.object({
+  "project": zod.object({
+  "id": zod.string().uuid(),
+  "title": zod.string(),
+  "idea": zod.string(),
+  "language": zod.enum(['Hindi', 'Hinglish', 'English']),
+  "genre": zod.string(),
+  "targetMinutes": zod.union([zod.literal(1),zod.literal(3),zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8),zod.literal(10)]),
+  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic', 'realistic']),
+  "scriptText": zod.string(),
+  "status": zod.enum(['concept', 'script_ready', 'scenes_ready', 'rendering', 'complete']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "job": zod.object({
+  "id": zod.string().uuid(),
+  "projectId": zod.string().uuid(),
+  "type": zod.enum(['story', 'scene_breakdown', 'full_video', 'render', 'youtube_upload']),
+  "status": zod.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']),
+  "progress": zod.number().int().min(startStudioFullVideoResponseJobProgressMin).max(startStudioFullVideoResponseJobProgressMax),
+  "attempt": zod.number().int(),
+  "maxAttempts": zod.number().int(),
+  "message": zod.string(),
+  "error": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
+
+
+/**
  * @summary Get studio totals and recent activity
  */
 export const getStudioOverviewResponseRecentJobsItemProgressMin = 0;
@@ -33,7 +96,7 @@ export const GetStudioOverviewResponse = zod.object({
   "recentJobs": zod.array(zod.object({
   "id": zod.string().uuid(),
   "projectId": zod.string().uuid(),
-  "type": zod.enum(['story', 'scene_breakdown', 'render', 'youtube_upload']),
+  "type": zod.enum(['story', 'scene_breakdown', 'full_video', 'render', 'youtube_upload']),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']),
   "progress": zod.number().int().min(getStudioOverviewResponseRecentJobsItemProgressMin).max(getStudioOverviewResponseRecentJobsItemProgressMax),
   "attempt": zod.number().int(),
@@ -55,8 +118,8 @@ export const ListStudioProjectsResponseItem = zod.object({
   "idea": zod.string(),
   "language": zod.enum(['Hindi', 'Hinglish', 'English']),
   "genre": zod.string(),
-  "targetMinutes": zod.union([zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8)]),
-  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic']),
+  "targetMinutes": zod.union([zod.literal(1),zod.literal(3),zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8),zod.literal(10)]),
+  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic', 'realistic']),
   "scriptText": zod.string(),
   "status": zod.enum(['concept', 'script_ready', 'scenes_ready', 'rendering', 'complete']),
   "createdAt": zod.coerce.date(),
@@ -72,6 +135,8 @@ export const createStudioProjectBodyTitleMax = 160;
 
 export const createStudioProjectBodyIdeaMax = 5000;
 
+export const createStudioProjectBodyScriptTextMax = 100000;
+
 export const createStudioProjectBodyGenreMax = 80;
 
 
@@ -79,10 +144,11 @@ export const createStudioProjectBodyGenreMax = 80;
 export const CreateStudioProjectBody = zod.object({
   "title": zod.string().min(1).max(createStudioProjectBodyTitleMax),
   "idea": zod.string().max(createStudioProjectBodyIdeaMax),
+  "scriptText": zod.string().max(createStudioProjectBodyScriptTextMax).optional(),
   "language": zod.enum(['Hindi', 'Hinglish', 'English']),
   "genre": zod.string().min(1).max(createStudioProjectBodyGenreMax),
-  "targetMinutes": zod.union([zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8)]),
-  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic'])
+  "targetMinutes": zod.union([zod.literal(1),zod.literal(3),zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8),zod.literal(10)]),
+  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic', 'realistic'])
 })
 
 export const CreateStudioProjectResponse = zod.object({
@@ -91,8 +157,8 @@ export const CreateStudioProjectResponse = zod.object({
   "idea": zod.string(),
   "language": zod.enum(['Hindi', 'Hinglish', 'English']),
   "genre": zod.string(),
-  "targetMinutes": zod.union([zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8)]),
-  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic']),
+  "targetMinutes": zod.union([zod.literal(1),zod.literal(3),zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8),zod.literal(10)]),
+  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic', 'realistic']),
   "scriptText": zod.string(),
   "status": zod.enum(['concept', 'script_ready', 'scenes_ready', 'rendering', 'complete']),
   "createdAt": zod.coerce.date(),
@@ -113,8 +179,8 @@ export const GetStudioProjectResponse = zod.object({
   "idea": zod.string(),
   "language": zod.enum(['Hindi', 'Hinglish', 'English']),
   "genre": zod.string(),
-  "targetMinutes": zod.union([zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8)]),
-  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic']),
+  "targetMinutes": zod.union([zod.literal(1),zod.literal(3),zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8),zod.literal(10)]),
+  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic', 'realistic']),
   "scriptText": zod.string(),
   "status": zod.enum(['concept', 'script_ready', 'scenes_ready', 'rendering', 'complete']),
   "createdAt": zod.coerce.date(),
@@ -144,8 +210,8 @@ export const UpdateStudioProjectBody = zod.object({
   "idea": zod.string().max(updateStudioProjectBodyIdeaMax).optional(),
   "language": zod.enum(['Hindi', 'Hinglish', 'English']).optional(),
   "genre": zod.string().min(1).max(updateStudioProjectBodyGenreMax).optional(),
-  "targetMinutes": zod.union([zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8)]).optional(),
-  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic']).optional(),
+  "targetMinutes": zod.union([zod.literal(1),zod.literal(3),zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8),zod.literal(10)]).optional(),
+  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic', 'realistic']).optional(),
   "scriptText": zod.string().max(updateStudioProjectBodyScriptTextMax).optional()
 })
 
@@ -155,8 +221,8 @@ export const UpdateStudioProjectResponse = zod.object({
   "idea": zod.string(),
   "language": zod.enum(['Hindi', 'Hinglish', 'English']),
   "genre": zod.string(),
-  "targetMinutes": zod.union([zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8)]),
-  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic']),
+  "targetMinutes": zod.union([zod.literal(1),zod.literal(3),zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8),zod.literal(10)]),
+  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic', 'realistic']),
   "scriptText": zod.string(),
   "status": zod.enum(['concept', 'script_ready', 'scenes_ready', 'rendering', 'complete']),
   "createdAt": zod.coerce.date(),
@@ -194,6 +260,7 @@ export const ListProjectScenesResponseItem = zod.object({
   "camera": zod.string(),
   "visualPrompt": zod.string(),
   "audioNotes": zod.string(),
+  "transition": zod.string(),
   "assetPath": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -227,6 +294,8 @@ export const createProjectSceneBodyVisualPromptMax = 5000;
 
 export const createProjectSceneBodyAudioNotesMax = 2000;
 
+export const createProjectSceneBodyTransitionMax = 500;
+
 
 
 export const CreateProjectSceneBody = zod.object({
@@ -239,7 +308,8 @@ export const CreateProjectSceneBody = zod.object({
   "background": zod.string().max(createProjectSceneBodyBackgroundMax).optional(),
   "camera": zod.string().max(createProjectSceneBodyCameraMax).optional(),
   "visualPrompt": zod.string().max(createProjectSceneBodyVisualPromptMax).optional(),
-  "audioNotes": zod.string().max(createProjectSceneBodyAudioNotesMax).optional()
+  "audioNotes": zod.string().max(createProjectSceneBodyAudioNotesMax).optional(),
+  "transition": zod.string().max(createProjectSceneBodyTransitionMax).optional()
 })
 
 export const CreateProjectSceneResponse = zod.object({
@@ -255,6 +325,7 @@ export const CreateProjectSceneResponse = zod.object({
   "camera": zod.string(),
   "visualPrompt": zod.string(),
   "audioNotes": zod.string(),
+  "transition": zod.string(),
   "assetPath": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -287,6 +358,8 @@ export const updateStudioSceneBodyVisualPromptMax = 5000;
 
 export const updateStudioSceneBodyAudioNotesMax = 2000;
 
+export const updateStudioSceneBodyTransitionMax = 500;
+
 
 
 export const UpdateStudioSceneBody = zod.object({
@@ -299,7 +372,8 @@ export const UpdateStudioSceneBody = zod.object({
   "background": zod.string().max(updateStudioSceneBodyBackgroundMax).optional(),
   "camera": zod.string().max(updateStudioSceneBodyCameraMax).optional(),
   "visualPrompt": zod.string().max(updateStudioSceneBodyVisualPromptMax).optional(),
-  "audioNotes": zod.string().max(updateStudioSceneBodyAudioNotesMax).optional()
+  "audioNotes": zod.string().max(updateStudioSceneBodyAudioNotesMax).optional(),
+  "transition": zod.string().max(updateStudioSceneBodyTransitionMax).optional()
 })
 
 export const UpdateStudioSceneResponse = zod.object({
@@ -315,6 +389,7 @@ export const UpdateStudioSceneResponse = zod.object({
   "camera": zod.string(),
   "visualPrompt": zod.string(),
   "audioNotes": zod.string(),
+  "transition": zod.string(),
   "assetPath": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -451,8 +526,8 @@ export const CreateStoryGenerationJobBody = zod.object({
   "idea": zod.string().min(1).max(createStoryGenerationJobBodyIdeaMax),
   "language": zod.enum(['Hindi', 'Hinglish', 'English']),
   "genre": zod.string().min(1).max(createStoryGenerationJobBodyGenreMax),
-  "targetMinutes": zod.union([zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8)]),
-  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic'])
+  "targetMinutes": zod.union([zod.literal(1),zod.literal(3),zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8),zod.literal(10)]),
+  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic', 'realistic'])
 })
 
 export const createStoryGenerationJobResponseProgressMin = 0;
@@ -463,7 +538,7 @@ export const createStoryGenerationJobResponseProgressMax = 100;
 export const CreateStoryGenerationJobResponse = zod.object({
   "id": zod.string().uuid(),
   "projectId": zod.string().uuid(),
-  "type": zod.enum(['story', 'scene_breakdown', 'render', 'youtube_upload']),
+  "type": zod.enum(['story', 'scene_breakdown', 'full_video', 'render', 'youtube_upload']),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']),
   "progress": zod.number().int().min(createStoryGenerationJobResponseProgressMin).max(createStoryGenerationJobResponseProgressMax),
   "attempt": zod.number().int(),
@@ -490,7 +565,7 @@ export const createSceneBreakdownJobResponseProgressMax = 100;
 export const CreateSceneBreakdownJobResponse = zod.object({
   "id": zod.string().uuid(),
   "projectId": zod.string().uuid(),
-  "type": zod.enum(['story', 'scene_breakdown', 'render', 'youtube_upload']),
+  "type": zod.enum(['story', 'scene_breakdown', 'full_video', 'render', 'youtube_upload']),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']),
   "progress": zod.number().int().min(createSceneBreakdownJobResponseProgressMin).max(createSceneBreakdownJobResponseProgressMax),
   "attempt": zod.number().int(),
@@ -517,7 +592,7 @@ export const listStudioJobsResponseProgressMax = 100;
 export const ListStudioJobsResponseItem = zod.object({
   "id": zod.string().uuid(),
   "projectId": zod.string().uuid(),
-  "type": zod.enum(['story', 'scene_breakdown', 'render', 'youtube_upload']),
+  "type": zod.enum(['story', 'scene_breakdown', 'full_video', 'render', 'youtube_upload']),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']),
   "progress": zod.number().int().min(listStudioJobsResponseProgressMin).max(listStudioJobsResponseProgressMax),
   "attempt": zod.number().int(),
@@ -545,7 +620,7 @@ export const retryStudioJobResponseProgressMax = 100;
 export const RetryStudioJobResponse = zod.object({
   "id": zod.string().uuid(),
   "projectId": zod.string().uuid(),
-  "type": zod.enum(['story', 'scene_breakdown', 'render', 'youtube_upload']),
+  "type": zod.enum(['story', 'scene_breakdown', 'full_video', 'render', 'youtube_upload']),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']),
   "progress": zod.number().int().min(retryStudioJobResponseProgressMin).max(retryStudioJobResponseProgressMax),
   "attempt": zod.number().int(),
@@ -572,7 +647,7 @@ export const cancelStudioJobResponseProgressMax = 100;
 export const CancelStudioJobResponse = zod.object({
   "id": zod.string().uuid(),
   "projectId": zod.string().uuid(),
-  "type": zod.enum(['story', 'scene_breakdown', 'render', 'youtube_upload']),
+  "type": zod.enum(['story', 'scene_breakdown', 'full_video', 'render', 'youtube_upload']),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']),
   "progress": zod.number().int().min(cancelStudioJobResponseProgressMin).max(cancelStudioJobResponseProgressMax),
   "attempt": zod.number().int(),
@@ -610,8 +685,8 @@ export const ExportStudioBackupResponse = zod.object({
   "idea": zod.string(),
   "language": zod.enum(['Hindi', 'Hinglish', 'English']),
   "genre": zod.string(),
-  "targetMinutes": zod.union([zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8)]),
-  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic']),
+  "targetMinutes": zod.union([zod.literal(1),zod.literal(3),zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8),zod.literal(10)]),
+  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic', 'realistic']),
   "scriptText": zod.string(),
   "status": zod.enum(['concept', 'script_ready', 'scenes_ready', 'rendering', 'complete']),
   "createdAt": zod.coerce.date(),
@@ -630,6 +705,7 @@ export const ExportStudioBackupResponse = zod.object({
   "camera": zod.string(),
   "visualPrompt": zod.string(),
   "audioNotes": zod.string(),
+  "transition": zod.string(),
   "assetPath": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -660,8 +736,8 @@ export const RestoreStudioBackupBody = zod.object({
   "idea": zod.string(),
   "language": zod.enum(['Hindi', 'Hinglish', 'English']),
   "genre": zod.string(),
-  "targetMinutes": zod.union([zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8)]),
-  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic']),
+  "targetMinutes": zod.union([zod.literal(1),zod.literal(3),zod.literal(5),zod.literal(6),zod.literal(7),zod.literal(8),zod.literal(10)]),
+  "visualStyle": zod.enum(['2d', '3d-cartoon', 'anime', 'cinematic', 'realistic']),
   "scriptText": zod.string(),
   "status": zod.enum(['concept', 'script_ready', 'scenes_ready', 'rendering', 'complete']),
   "createdAt": zod.coerce.date(),
@@ -680,6 +756,7 @@ export const RestoreStudioBackupBody = zod.object({
   "camera": zod.string(),
   "visualPrompt": zod.string(),
   "audioNotes": zod.string(),
+  "transition": zod.string(),
   "assetPath": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()

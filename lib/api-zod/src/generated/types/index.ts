@@ -6,6 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './fullVideoInput';
+export * from './fullVideoInputAspectRatio';
+export * from './fullVideoInputLanguage';
+export * from './fullVideoInputTargetMinutes';
+export * from './fullVideoInputVisualStyle';
+export * from './fullVideoStart';
 export * from './healthStatus';
 export * from './listStudioJobsParams';
 export * from './restoreResult';

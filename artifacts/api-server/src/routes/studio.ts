@@ -18,6 +18,8 @@ import {
   ListStudioJobsQueryParams,
   RestoreStudioBackupBody,
   RetryStudioJobParams,
+  StartStudioFullVideoBody,
+  StartStudioFullVideoResponse,
   UpdateStudioProjectBody,
   UpdateStudioProjectParams,
   UpdateStudioSceneBody,
@@ -203,6 +205,88 @@ router.get("/studio/projects", async (req, res) => {
   }
 });
 
+router.post("/studio/videos/generate", async (req, res) => {
+  const body = StartStudioFullVideoBody.safeParse(req.body);
+  if (!body.success) {
+    badRequest(res, body.error.issues[0]?.message ?? "Invalid video settings.");
+    return;
+  }
+  try {
+    const userId = getAuth(req).userId;
+    if (!userId || !generationRateAllowed(userId)) {
+      res.status(429).json({
+        error: "Generation is limited to three submitted jobs per minute.",
+      });
+      return;
+    }
+    const [active] = await db
+      .select({ total: count() })
+      .from(studioJobsTable)
+      .where(inArray(studioJobsTable.status, ["queued", "running"]));
+    if ((active?.total ?? 0) >= 4) {
+      res.status(429).json({
+        error: "The studio queue is full. Wait for an active job to finish.",
+      });
+      return;
+    }
+    const characterIds = body.data.characterIds ?? [];
+    if (characterIds.length) {
+      const found = await db
+        .select({ id: studioCharactersTable.id })
+        .from(studioCharactersTable)
+        .where(inArray(studioCharactersTable.id, characterIds));
+      if (found.length !== characterIds.length) {
+        badRequest(res, "One or more selected character profiles do not exist.");
+        return;
+      }
+    }
+    const result = await db.transaction(async (tx) => {
+      const [project] = await tx
+        .insert(studioProjectsTable)
+        .values({
+          title: body.data.title,
+          idea: body.data.idea ?? "",
+          language: body.data.language,
+          genre: body.data.genre,
+          targetMinutes: body.data.targetMinutes,
+          visualStyle: body.data.visualStyle,
+          scriptText: body.data.scriptText,
+          status: "script_ready",
+        })
+        .returning();
+      if (!project) throw new Error("Project insert returned no row.");
+      const [job] = await tx
+        .insert(studioJobsTable)
+        .values({
+          projectId: project.id,
+          type: "full_video",
+          status: "queued",
+          progress: 0,
+          attempt: 0,
+          maxAttempts: 3,
+          message: "Queued. The script will be split into scenes automatically.",
+          payload: {
+            aspectRatio: body.data.aspectRatio,
+            characterIds,
+          },
+        })
+        .returning();
+      if (!job) throw new Error("Job insert returned no row.");
+      return { project, job };
+    });
+    res
+      .status(202)
+      .json(
+        StartStudioFullVideoResponse.parse({
+          project: projectDto(result.project),
+          job: jobDto(result.job),
+        }),
+      );
+  } catch (error) {
+    reportError(req, res, error);
+  }
+});
+
 router.post("/studio/projects", async (req, res) => {
   try {
     const parsed = CreateStudioProjectBody.safeParse(req.body);
@@ -214,7 +298,7 @@ router.post("/studio/projects", async (req, res) => {
       .insert(studioProjectsTable)
       .values({
         ...parsed.data,
-        scriptText: "",
+        scriptText: parsed.data.scriptText ?? "",
         status: "concept",
       })
       .returning();

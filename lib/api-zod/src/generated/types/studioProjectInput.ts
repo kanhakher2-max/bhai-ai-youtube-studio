@@ -17,6 +17,8 @@ export interface StudioProjectInput {
   title: string;
   /** @maxLength 5000 */
   idea: string;
+  /** @maxLength 100000 */
+  scriptText?: string;
   language: StudioProjectInputLanguage;
   /**
      * @minLength 1

@@ -68,6 +68,7 @@ export const studioScenesTable = pgTable(
     camera: text("camera").notNull().default(""),
     visualPrompt: text("visual_prompt").notNull().default(""),
     audioNotes: text("audio_notes").notNull().default(""),
+    transition: text("transition").notNull().default("cut"),
     assetPath: text("asset_path"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

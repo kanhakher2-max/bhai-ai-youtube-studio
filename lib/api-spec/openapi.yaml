@@ -28,6 +28,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /studio/videos/generate:
+    post:
+      operationId: startStudioFullVideo
+      tags: [studio]
+      summary: Create a project and queue its script-to-video workflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FullVideoInput"
+      responses:
+        "202":
+          description: Project saved and workflow queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FullVideoStart"
   /studio/overview:
     get:
       operationId: getStudioOverview
@@ -437,8 +455,8 @@ components:
         idea: { type: string }
         language: { type: string, enum: [Hindi, Hinglish, English] }
         genre: { type: string }
-        targetMinutes: { type: integer, enum: [5, 6, 7, 8] }
-        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic] }
+        targetMinutes: { type: integer, enum: [1, 3, 5, 6, 7, 8, 10] }
+        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic, realistic] }
         scriptText: { type: string }
         status: { type: string, enum: [concept, script_ready, scenes_ready, rendering, complete] }
         createdAt: { type: string, format: date-time }
@@ -449,10 +467,11 @@ components:
       properties:
         title: { type: string, minLength: 1, maxLength: 160 }
         idea: { type: string, maxLength: 5000 }
+        scriptText: { type: string, maxLength: 100000 }
         language: { type: string, enum: [Hindi, Hinglish, English] }
         genre: { type: string, minLength: 1, maxLength: 80 }
-        targetMinutes: { type: integer, enum: [5, 6, 7, 8] }
-        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic] }
+        targetMinutes: { type: integer, enum: [1, 3, 5, 6, 7, 8, 10] }
+        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic, realistic] }
     StudioProjectUpdate:
       type: object
       minProperties: 1
@@ -461,12 +480,12 @@ components:
         idea: { type: string, maxLength: 5000 }
         language: { type: string, enum: [Hindi, Hinglish, English] }
         genre: { type: string, minLength: 1, maxLength: 80 }
-        targetMinutes: { type: integer, enum: [5, 6, 7, 8] }
-        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic] }
+        targetMinutes: { type: integer, enum: [1, 3, 5, 6, 7, 8, 10] }
+        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic, realistic] }
         scriptText: { type: string, maxLength: 100000 }
     StudioScene:
       type: object
-      required: [id, projectId, sequence, title, durationSeconds, action, dialogue, narration, background, camera, visualPrompt, audioNotes, assetPath, createdAt, updatedAt]
+      required: [id, projectId, sequence, title, durationSeconds, action, dialogue, narration, background, camera, visualPrompt, audioNotes, transition, assetPath, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         projectId: { type: string, format: uuid }
@@ -480,6 +499,7 @@ components:
         camera: { type: string }
         visualPrompt: { type: string }
         audioNotes: { type: string }
+        transition: { type: string }
         assetPath: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -497,6 +517,7 @@ components:
         camera: { type: string, maxLength: 2000 }
         visualPrompt: { type: string, maxLength: 5000 }
         audioNotes: { type: string, maxLength: 2000 }
+        transition: { type: string, maxLength: 500 }
     StudioSceneUpdate:
       type: object
       minProperties: 1
@@ -511,6 +532,7 @@ components:
         camera: { type: string, maxLength: 2000 }
         visualPrompt: { type: string, maxLength: 5000 }
         audioNotes: { type: string, maxLength: 2000 }
+        transition: { type: string, maxLength: 500 }
     StudioCharacter:
       type: object
       required: [id, name, description, appearance, voiceNotes, visualStyle, referencePath, createdAt, updatedAt]
@@ -549,15 +571,38 @@ components:
         idea: { type: string, minLength: 1, maxLength: 5000 }
         language: { type: string, enum: [Hindi, Hinglish, English] }
         genre: { type: string, minLength: 1, maxLength: 80 }
-        targetMinutes: { type: integer, enum: [5, 6, 7, 8] }
-        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic] }
+        targetMinutes: { type: integer, enum: [1, 3, 5, 6, 7, 8, 10] }
+        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic, realistic] }
+    FullVideoInput:
+      type: object
+      required: [title, scriptText, language, genre, targetMinutes, visualStyle, aspectRatio]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 160 }
+        idea: { type: string, maxLength: 5000 }
+        scriptText: { type: string, minLength: 100, maxLength: 100000 }
+        language: { type: string, enum: [Hindi, Hinglish, English] }
+        genre: { type: string, minLength: 1, maxLength: 80 }
+        targetMinutes: { type: integer, enum: [1, 3, 5, 8, 10] }
+        visualStyle: { type: string, enum: [2d, 3d-cartoon, anime, cinematic, realistic] }
+        aspectRatio: { type: string, enum: ["16:9", "9:16"] }
+        characterIds:
+          type: array
+          uniqueItems: true
+          maxItems: 30
+          items: { type: string, format: uuid }
+    FullVideoStart:
+      type: object
+      required: [project, job]
+      properties:
+        project: { $ref: "#/components/schemas/StudioProject" }
+        job: { $ref: "#/components/schemas/StudioJob" }
     StudioJob:
       type: object
       required: [id, projectId, type, status, progress, attempt, maxAttempts, message, error, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         projectId: { type: string, format: uuid }
-        type: { type: string, enum: [story, scene_breakdown, render, youtube_upload] }
+        type: { type: string, enum: [story, scene_breakdown, full_video, render, youtube_upload] }
         status: { type: string, enum: [queued, running, succeeded, failed, cancelled] }
         progress: { type: integer, minimum: 0, maximum: 100 }
         attempt: { type: integer }

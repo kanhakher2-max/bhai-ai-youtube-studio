@@ -1,9 +1,17 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { db, pool, studioJobsTable, studioProjectsTable, studioScenesTable } from "@workspace/db";
+import {
+  db,
+  pool,
+  studioCharactersTable,
+  studioJobsTable,
+  studioProjectsTable,
+  studioScenesTable,
+} from "@workspace/db";
 import type { StudioJob } from "@workspace/api-zod";
-import { getOllamaConfig } from "./studioEngines";
+import { getOllamaConfig, getStudioEngineHealth } from "./studioEngines";
 import { logger } from "./logger";
+import { fitSceneDurations, getRetryPlan, planScriptScenes } from "./scenePlanning";
 
 type ClaimedJob = {
   id: string;
@@ -39,6 +47,7 @@ const sceneResultSchema = z.object({
         camera: z.string().max(2000),
         visualPrompt: z.string().max(5000),
         audioNotes: z.string().max(2000),
+        transition: z.string().max(500).optional(),
       }),
     )
     .min(3)
@@ -177,10 +186,13 @@ async function runStoryJob(job: ClaimedJob, signal: AbortSignal): Promise<void> 
       language: z.enum(["Hindi", "Hinglish", "English"]),
       genre: z.string().min(1).max(80),
       targetMinutes: z.union([
+        z.literal(1),
+        z.literal(3),
         z.literal(5),
         z.literal(6),
         z.literal(7),
         z.literal(8),
+        z.literal(10),
       ]),
       visualStyle: z.enum(["2d", "3d-cartoon", "anime", "cinematic"]),
     })
@@ -304,16 +316,15 @@ async function runSceneBreakdownJob(
       "The local model did not return a valid scene breakdown. No scenes were saved.",
     );
   }
-  const duration = parsed.data.scenes.reduce(
-    (total, scene) => total + scene.durationSeconds,
-    0,
-  );
   const targetDuration = project.targetMinutes * 60;
-  if (Math.abs(duration - targetDuration) > targetDuration * 0.15) {
-    throw new PermanentJobError(
-      `The local model proposed ${duration} seconds of scenes for a ${targetDuration}-second target. Adjust its output or retry; no scenes were saved.`,
-    );
-  }
+  const scenes = fitSceneDurations(
+    parsed.data.scenes.map((scene) => ({
+      ...scene,
+      transition: scene.transition || "cut",
+    })),
+    targetDuration,
+  );
+  const duration = scenes.reduce((total, scene) => total + scene.durationSeconds, 0);
 
   await updateProgress(job.id, 88, "Saving the scene breakdown");
   await ensureNotCancelled(job.id, signal);
@@ -341,7 +352,7 @@ async function runSceneBreakdownJob(
       .delete(studioScenesTable)
       .where(eq(studioScenesTable.projectId, project.id));
     await tx.insert(studioScenesTable).values(
-      parsed.data.scenes.map((scene, index) => ({
+      scenes.map((scene, index) => ({
         projectId: project.id,
         sequence: index + 1,
         ...scene,
@@ -354,6 +365,114 @@ async function runSceneBreakdownJob(
   });
 }
 
+async function runFullVideoJob(
+  job: ClaimedJob,
+  signal: AbortSignal,
+): Promise<void> {
+  const payload = z
+    .object({
+      aspectRatio: z.enum(["16:9", "9:16"]),
+      characterIds: z.array(z.string().uuid()).max(30).default([]),
+    })
+    .safeParse(job.payload);
+  if (!payload.success) {
+    throw new PermanentJobError("Saved full-video settings are invalid.");
+  }
+  const [project] = await db
+    .select()
+    .from(studioProjectsTable)
+    .where(eq(studioProjectsTable.id, job.project_id))
+    .limit(1);
+  if (!project?.scriptText.trim()) {
+    throw new PermanentJobError("Save a complete script before generating a video.");
+  }
+  await updateProgress(job.id, 8, "Preparing the script and character references");
+  await ensureNotCancelled(job.id, signal);
+
+  const characters = payload.data.characterIds.length
+    ? await db
+        .select()
+        .from(studioCharactersTable)
+        .where(inArray(studioCharactersTable.id, payload.data.characterIds))
+    : [];
+  if (characters.length !== payload.data.characterIds.length) {
+    throw new PermanentJobError(
+      "One or more selected character profiles no longer exist. No storyboard was saved.",
+    );
+  }
+  const characterContinuity = characters.map((character) =>
+    [
+      `${character.name}:`,
+      character.appearance || character.description,
+      character.visualStyle && `Visual style: ${character.visualStyle}.`,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+  const scenes = planScriptScenes({
+    script: project.scriptText,
+    targetMinutes: project.targetMinutes,
+    visualStyle: project.visualStyle,
+    characterContinuity,
+  });
+  const exactDuration = scenes.reduce(
+    (total, scene) => total + scene.durationSeconds,
+    0,
+  );
+
+  await updateProgress(job.id, 18, "Automatically splitting the script into timed scenes");
+  await ensureNotCancelled(job.id, signal);
+  await db.transaction(async (tx) => {
+    const [activeJob] = await tx
+      .update(studioJobsTable)
+      .set({
+        progress: 25,
+        message: `Storyboard draft saved (${scenes.length} scenes, ${exactDuration} seconds, ${payload.data.aspectRatio}). Checking media engines.`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(studioJobsTable.id, job.id),
+          eq(studioJobsTable.status, "running"),
+        ),
+      )
+      .returning({ id: studioJobsTable.id });
+    if (!activeJob) {
+      throw new PermanentJobError("Generation was cancelled before the storyboard was saved.");
+    }
+    await tx
+      .delete(studioScenesTable)
+      .where(eq(studioScenesTable.projectId, project.id));
+    await tx.insert(studioScenesTable).values(
+      scenes.map((scene, index) => ({
+        projectId: project.id,
+        sequence: index + 1,
+        ...scene,
+      })),
+    );
+    await tx
+      .update(studioProjectsTable)
+      .set({ status: "scenes_ready", updatedAt: new Date() })
+      .where(eq(studioProjectsTable.id, project.id));
+  });
+
+  const engines = await getStudioEngineHealth();
+  const mediaEngine = engines.find((engine) => engine.id === "comfyui");
+  const speechEngine = engines.find((engine) => engine.id === "piper");
+  const ffmpeg = engines.find((engine) => engine.id === "ffmpeg");
+  const missing = [
+    !mediaEngine?.available &&
+      `Image/video generation is not available: ${mediaEngine?.detail ?? "no configured adapter"}`,
+    !speechEngine?.available &&
+      `Speech generation is not available: ${speechEngine?.detail ?? "no configured adapter"}`,
+    !ffmpeg?.available && `FFmpeg is not available: ${ffmpeg?.detail ?? "not installed"}`,
+    "The build does not yet have a complete media renderer or persistent media export path.",
+  ].filter(Boolean);
+  throw new PermanentJobError(
+    `Storyboard is saved and timed to ${exactDuration} seconds. No media was generated. Full video stopped: ${missing.join(" ")}`,
+  );
+}
+
 async function processJob(job: ClaimedJob): Promise<void> {
   const controller = new AbortController();
   activeControllers.set(job.id, controller);
@@ -362,6 +481,8 @@ async function processJob(job: ClaimedJob): Promise<void> {
       await runStoryJob(job, controller.signal);
     } else if (job.type === "scene_breakdown") {
       await runSceneBreakdownJob(job, controller.signal);
+    } else if (job.type === "full_video") {
+      await runFullVideoJob(job, controller.signal);
     } else {
       throw new PermanentJobError(
         `The ${job.type} worker is not implemented in this build. No output was created.`,
@@ -369,7 +490,10 @@ async function processJob(job: ClaimedJob): Promise<void> {
     }
   } catch (error) {
     const [current] = await db
-      .select({ status: studioJobsTable.status })
+      .select({
+        status: studioJobsTable.status,
+        progress: studioJobsTable.progress,
+      })
       .from(studioJobsTable)
       .where(eq(studioJobsTable.id, job.id))
       .limit(1);
@@ -391,24 +515,31 @@ async function processJob(job: ClaimedJob): Promise<void> {
       error instanceof Error
         ? error.message.slice(0, 500)
         : "Generation failed for an unknown reason.";
-    const retry = !(error instanceof PermanentJobError) &&
-      job.attempt < job.max_attempts;
-    const retryDelaySeconds = 2 ** Math.min(job.attempt, 4);
+    const retryPlan = getRetryPlan(
+      error instanceof PermanentJobError,
+      job.attempt,
+      job.max_attempts,
+    );
     await db
       .update(studioJobsTable)
       .set({
-        status: retry ? "queued" : "failed",
-        progress: retry ? 0 : 100,
-        availableAt: new Date(Date.now() + retryDelaySeconds * 1000),
-        message: retry
-          ? `Temporary error. Retrying in ${retryDelaySeconds} seconds.`
-          : "Generation failed. No result was saved.",
+        status: retryPlan.retry ? "queued" : "failed",
+        progress: retryPlan.retry ? 0 : (current?.progress ?? 0),
+        availableAt: new Date(Date.now() + retryPlan.delayMs),
+        message: retryPlan.retry
+          ? `Temporary error. Retrying in ${retryPlan.delayMs / 1000} seconds.`
+          : message,
         error: message,
         updatedAt: new Date(),
       })
       .where(eq(studioJobsTable.id, job.id));
     logger.error(
-      { jobId: job.id, projectId: job.project_id, attempt: job.attempt, retry },
+      {
+        jobId: job.id,
+        projectId: job.project_id,
+        attempt: job.attempt,
+        retry: retryPlan.retry,
+      },
       "Studio background job failed",
     );
   } finally {
@@ -485,7 +616,7 @@ export async function startStudioWorker(): Promise<void> {
 
 export async function queueStudioJob(
   projectId: string,
-  type: "story" | "scene_breakdown",
+  type: "story" | "scene_breakdown" | "full_video",
   payload: Record<string, unknown>,
 ): Promise<StudioJob> {
   const [job] = await db

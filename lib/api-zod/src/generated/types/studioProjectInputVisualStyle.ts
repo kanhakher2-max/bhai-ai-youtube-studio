@@ -14,4 +14,5 @@ export const StudioProjectInputVisualStyle = {
   '3d-cartoon': '3d-cartoon',
   anime: 'anime',
   cinematic: 'cinematic',
+  realistic: 'realistic',
 } as const;

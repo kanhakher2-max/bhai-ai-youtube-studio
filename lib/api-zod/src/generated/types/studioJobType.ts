@@ -12,6 +12,7 @@ export type StudioJobType = typeof StudioJobType[keyof typeof StudioJobType];
 export const StudioJobType = {
   story: 'story',
   scene_breakdown: 'scene_breakdown',
+  full_video: 'full_video',
   render: 'render',
   youtube_upload: 'youtube_upload',
 } as const;

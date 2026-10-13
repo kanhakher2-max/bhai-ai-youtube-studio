@@ -33,4 +33,6 @@ export interface StudioSceneInput {
   visualPrompt?: string;
   /** @maxLength 2000 */
   audioNotes?: string;
+  /** @maxLength 500 */
+  transition?: string;
 }

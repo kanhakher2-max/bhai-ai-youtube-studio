@@ -19,6 +19,7 @@ export interface StudioScene {
   camera: string;
   visualPrompt: string;
   audioNotes: string;
+  transition: string;
   /** @nullable */
   assetPath: string | null;
   createdAt: Date;

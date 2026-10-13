@@ -20,6 +20,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  FullVideoInput,
+  FullVideoStart,
   HealthStatus,
   ListStudioJobsParams,
   RestoreResult,
@@ -145,6 +147,94 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
+
+export const getStartStudioFullVideoUrl = () => {
+
+
+
+
+  return `/api/studio/videos/generate`
+}
+
+/**
+ * @summary Create a project and queue its script-to-video workflow
+ */
+export const startStudioFullVideo = async (fullVideoInput: FullVideoInput, options?: Parameters<typeof customFetch>[1]): Promise<FullVideoStart> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<FullVideoStart>(getStartStudioFullVideoUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(fullVideoInput)
+  }
+);}
+
+
+
+
+
+export const getStartStudioFullVideoMutationKey = () => ['startStudioFullVideo'] as const;
+
+export const getStartStudioFullVideoMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startStudioFullVideo>>, TError,StartStudioFullVideoMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startStudioFullVideo>>, TError,StartStudioFullVideoMutationVariables, TContext> => {
+
+const mutationKey = getStartStudioFullVideoMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startStudioFullVideo>>, StartStudioFullVideoMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  startStudioFullVideo(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartStudioFullVideoMutationResult = NonNullable<Awaited<ReturnType<typeof startStudioFullVideo>>>
+    export type StartStudioFullVideoMutationBody = BodyType<FullVideoInput>
+    export type StartStudioFullVideoMutationError = ErrorType<unknown>
+    export type StartStudioFullVideoMutationVariables = {data: BodyType<FullVideoInput>}
+
+    /**
+ * @summary Create a project and queue its script-to-video workflow
+ */
+export const useStartStudioFullVideo = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startStudioFullVideo>>, TError,StartStudioFullVideoMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startStudioFullVideo>>,
+        TError,
+        StartStudioFullVideoMutationVariables,
+        TContext
+      > => {
+      return useMutation(getStartStudioFullVideoMutationOptions(options));
+    }
 
 export const getGetStudioOverviewUrl = () => {
 

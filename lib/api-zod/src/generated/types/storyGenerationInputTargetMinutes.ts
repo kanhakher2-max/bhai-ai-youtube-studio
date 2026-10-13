@@ -10,8 +10,11 @@ export type StoryGenerationInputTargetMinutes = typeof StoryGenerationInputTarge
 
 
 export const StoryGenerationInputTargetMinutes = {
+  NUMBER_1: 1,
+  NUMBER_3: 3,
   NUMBER_5: 5,
   NUMBER_6: 6,
   NUMBER_7: 7,
   NUMBER_8: 8,
+  NUMBER_10: 10,
 } as const;

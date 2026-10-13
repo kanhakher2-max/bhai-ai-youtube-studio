@@ -20,9 +20,9 @@ import {
   useExportStudioBackup, useGetStudioEngines, useGetStudioOverview, useGetStudioProject,
   useGetYouTubeAnalytics, useGetYouTubeStatus, useListProjectScenes, useListStudioCharacters,
   useListStudioJobs, useListStudioProjects, useRestoreStudioBackup, useRetryStudioJob,
-  useUpdateStudioCharacter, useUpdateStudioProject, useUpdateStudioScene,
+  useStartStudioFullVideo, useUpdateStudioCharacter, useUpdateStudioProject, useUpdateStudioScene,
 } from '@workspace/api-client-react';
-import type { StudioBackup, StudioCharacter, StudioProject, StudioScene } from '@workspace/api-client-react';
+import type { FullVideoInput, StudioBackup, StudioCharacter, StudioProject, StudioScene } from '@workspace/api-client-react';
 import './index.css';
 import './studio.css';
 
@@ -144,17 +144,28 @@ function Protected({ children }: { children: ReactNode }) {
   return <><Show when="signed-in"><StudioShell>{children}</StudioShell></Show><Show when="signed-out"><Redirect to="/" /></Show></>;
 }
 
-type ProjectFields = { title: string; idea: string; language: 'Hindi' | 'Hinglish' | 'English'; genre: string; targetMinutes: 5 | 6 | 7 | 8; visualStyle: '2d' | '3d-cartoon' | 'anime' | 'cinematic' };
-const initialProject: ProjectFields = { title: '', idea: '', language: 'Hinglish', genre: 'Drama', targetMinutes: 6, visualStyle: 'cinematic' };
-function ProjectForm({ submit, busy, close }: { submit: (data: ProjectFields) => void; busy: boolean; close: () => void }) {
+type ProjectFields = FullVideoInput;
+const initialProject: ProjectFields = { title: '', idea: '', scriptText: '', language: 'Hinglish', genre: 'Drama', targetMinutes: 5, visualStyle: 'cinematic', aspectRatio: '16:9', characterIds: [] };
+function ProjectForm({ submit, startFullVideo, busy, close, generationError }: { submit: (data: ProjectFields) => void; startFullVideo?: (data: ProjectFields) => void; busy: boolean; close: () => void; generationError?: unknown }) {
   const [form, setForm] = useState<ProjectFields>(initialProject);
-  const change = (key: keyof ProjectFields, value: string) => setForm((old) => ({ ...old, [key]: key === 'targetMinutes' ? Number(value) : value } as ProjectFields));
+  const characters = useListStudioCharacters();
+  const change = (key: Exclude<keyof ProjectFields, 'characterIds'>, value: string) => setForm((old) => ({ ...old, [key]: key === 'targetMinutes' ? Number(value) : value } as ProjectFields));
+  const setScript = (value: string) => setForm((old) => ({ ...old, scriptText: value, title: old.title || value.trim().split(/\s+/).slice(0, 8).join(' ').slice(0, 100) }));
+  const runFullVideo = () => {
+    const title = form.title.trim() || form.scriptText.trim().split(/\s+/).slice(0, 8).join(' ').slice(0, 100) || 'Untitled video';
+    startFullVideo?.({ ...form, title, scriptText: form.scriptText.trim() });
+  };
   return <form onSubmit={(e: FormEvent) => { e.preventDefault(); submit(form); }} className="form-stack">
-    <label>Project title<input autoFocus required maxLength={160} value={form.title} onChange={(e) => change('title', e.target.value)} placeholder="A story title" /></label>
-    <label>The idea<textarea required maxLength={5000} value={form.idea} onChange={(e) => change('idea', e.target.value)} placeholder="What happens, and why does it matter?" rows={4} /></label>
+    <label>Project title<input autoFocus maxLength={160} value={form.title} onChange={(e) => change('title', e.target.value)} placeholder="Optional — suggested from your script" /></label>
+    <label>Short premise <span className="field-optional">OPTIONAL</span><textarea maxLength={5000} value={form.idea} onChange={(e) => change('idea', e.target.value)} placeholder="Optional context for your story" rows={3} /></label>
+    <label>Paste the complete story or script<textarea className="script-input" minLength={100} maxLength={100000} value={form.scriptText} onChange={(e) => setScript(e.target.value)} placeholder="Paste Hindi, Hinglish or English script. At least 100 characters are needed to prepare scenes." rows={8} /></label>
+    <small className="field-hint">{form.scriptText.trim().split(/\s+/).filter(Boolean).length.toLocaleString()} words · roughly {Math.ceil(form.scriptText.trim().split(/\s+/).filter(Boolean).length / 120)} minutes at 120 words/minute</small>
     <div className="form-grid"><label>Language<select value={form.language} onChange={(e) => change('language', e.target.value)}><option>Hinglish</option><option>Hindi</option><option>English</option></select></label><label>Genre<input required maxLength={80} value={form.genre} onChange={(e) => change('genre', e.target.value)} /></label></div>
-    <div className="form-grid"><label>Target runtime<select value={form.targetMinutes} onChange={(e) => change('targetMinutes', e.target.value)}>{[5, 6, 7, 8].map((n) => <option value={n} key={n}>{n} minutes</option>)}</select></label><label>Visual style<select value={form.visualStyle} onChange={(e) => change('visualStyle', e.target.value)}><option value="cinematic">Cinematic</option><option value="2d">2D</option><option value="3d-cartoon">3D cartoon</option><option value="anime">Anime</option></select></label></div>
-    <div className="dialog-actions"><Button variant="quiet" onClick={close}>Cancel</Button><Button type="submit" disabled={busy}>{busy && <LoaderCircle className="spin" size={15} />} Create project <ArrowRight size={15} /></Button></div>
+    <div className="form-grid"><label>Target runtime<select value={form.targetMinutes} onChange={(e) => change('targetMinutes', e.target.value)}>{[1, 3, 5, 8, 10].map((n) => <option value={n} key={n}>{n} minute{n > 1 ? 's' : ''}</option>)}</select></label><label>Visual style<select value={form.visualStyle} onChange={(e) => change('visualStyle', e.target.value)}><option value="cinematic">Cinematic</option><option value="realistic">Realistic</option><option value="2d">2D animation</option><option value="3d-cartoon">3D animation</option><option value="anime">Anime</option></select></label></div>
+    <div className="form-grid"><label>Aspect ratio<select value={form.aspectRatio} onChange={(e) => change('aspectRatio', e.target.value)}><option value="16:9">16:9 YouTube</option><option value="9:16">9:16 vertical / Shorts</option></select></label>{characters.data?.length ? <label>Character continuity <span className="field-optional">TEXT PROFILES</span><select multiple size={Math.min(4, characters.data.length)} value={form.characterIds} onChange={(e) => setForm((old) => ({ ...old, characterIds: Array.from(e.target.selectedOptions, (option) => option.value) }))}>{characters.data.map((character) => <option value={character.id} key={character.id}>{character.name}</option>)}</select></label> : <div className="field-hint">Create a character profile to add written continuity notes. Reference-image conditioning is not available in this build.</div>}</div>
+    {startFullVideo && <div className="generation-readiness"><b>What this build can do</b><p>It saves a complete script and automatically creates an exact-duration storyboard draft. Image/video, voice and MP4 render adapters are not connected here; the job will report that block and will not claim a video was created. No paid provider is called.</p></div>}
+    {generationError && <p className="inline-error" role="alert">Could not start the video job. {String(generationError)}</p>}
+    <div className="dialog-actions"><Button type="button" variant="quiet" onClick={close}>Cancel</Button>{startFullVideo && <Button type="button" variant="soft" onClick={runFullVideo} disabled={busy || form.scriptText.trim().length < 100}>{busy ? <LoaderCircle className="spin" size={15} /> : <Clapperboard size={15} />} Generate Full Video</Button>}<Button type="submit" disabled={busy}>{busy && <LoaderCircle className="spin" size={15} />} Save project <ArrowRight size={15} /></Button></div>
   </form>;
 }
 function StatusTag({ status }: { status: string }) { return <span className={`status-tag status-${status}`}>{status.replaceAll('_', ' ')}</span>; }
@@ -165,7 +176,7 @@ function ProjectCard({ project, onDelete }: { project: StudioProject; onDelete?:
   </Link>{onDelete && <button aria-label={`Delete ${project.title}`} className="project-delete" onClick={() => onDelete(project)}><Trash2 size={15} /></button>}</article>;
 }
 function createProject(project: ReturnType<typeof useCreateStudioProject>, queryClient: ReturnType<typeof useQueryClient>, data: ProjectFields, onCreated?: (p: StudioProject) => void) {
-  project.mutate({ data }, { onSuccess: (p) => { queryClient.invalidateQueries({ queryKey: getListStudioProjectsQueryKey() }); queryClient.invalidateQueries({ queryKey: getGetStudioOverviewQueryKey() }); onCreated?.(p); } });
+  project.mutate({ data: { title: data.title || 'Untitled project', idea: data.idea ?? '', scriptText: data.scriptText, language: data.language, genre: data.genre, targetMinutes: data.targetMinutes, visualStyle: data.visualStyle } }, { onSuccess: (p) => { queryClient.invalidateQueries({ queryKey: getListStudioProjectsQueryKey() }); queryClient.invalidateQueries({ queryKey: getGetStudioOverviewQueryKey() }); onCreated?.(p); } });
 }
 
 function Dashboard() {

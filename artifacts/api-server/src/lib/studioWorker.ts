@@ -14,6 +14,7 @@ import { renderStudioVideo, studioVideoPath } from "./studioRenderer";
 import { access } from "node:fs/promises";
 import { constants } from "node:fs";
 import { uploadYouTubeVideo } from "./studioYoutube";
+import path from "node:path";
 import { logger } from "./logger";
 import { fitSceneDurations, getRetryPlan, planScriptScenes } from "./scenePlanning";
 
@@ -493,6 +494,8 @@ async function runFullVideoJob(
           outputFile: renderResult.outputPath.split(/[\\/]/u).pop(),
           renderMode: renderResult.mode,
           hasNarration: renderResult.hasNarration,
+          hasMusic: renderResult.hasMusic,
+          thumbnailPath: renderResult.thumbnailPath ? path.basename(renderResult.thumbnailPath) : null,
           warnings: renderResult.warnings,
         },
         updatedAt: new Date(),

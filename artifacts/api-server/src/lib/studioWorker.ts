@@ -14,6 +14,7 @@ import { renderStudioVideo, studioVideoPath } from "./studioRenderer";
 import { access } from "node:fs/promises";
 import { constants } from "node:fs";
 import { uploadYouTubeVideo } from "./studioYoutube";
+import path from "node:path";
 import { logger } from "./logger";
 import { fitSceneDurations, getRetryPlan, planScriptScenes } from "./scenePlanning";
 

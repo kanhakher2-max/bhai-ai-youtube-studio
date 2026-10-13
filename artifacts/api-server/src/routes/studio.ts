@@ -41,6 +41,9 @@ import {
   retryFailedStudioJob,
 } from "../lib/studioWorker";
 import { getStudioEngineHealth } from "../lib/studioEngines";
+import { access } from "node:fs/promises";
+import { constants } from "node:fs";
+import { studioVideoPath } from "../lib/studioRenderer";
 import {
   beginYouTubeOAuth,
   disconnectYouTube,
@@ -875,6 +878,34 @@ router.get("/studio/youtube/analytics", async (req, res) => {
   try {
     res.json(await youtubeAnalytics());
   } catch (error) {
+    reportError(req, res, error);
+  }
+});
+
+
+router.get("/studio/projects/:id/video", async (req, res) => {
+  const params = GetStudioProjectParams.safeParse(req.params);
+  if (!params.success) { badRequest(res, "Invalid project ID."); return; }
+  try {
+    const project = await requireProject(params.data.id);
+    if (!project) { notFound(res, "Project not found."); return; }
+    if (project.status !== "video_ready") {
+      res.status(409).json({ error: "No completed MP4 is available for this project yet." });
+      return;
+    }
+    const outputPath = studioVideoPath(project.id);
+    await access(outputPath, constants.R_OK);
+    res.download(outputPath, "bhai-ai-" + project.id + ".mp4", (error) => {
+      if (error) {
+        req.log.error({ err: error, projectId: project.id }, "MP4 download failed");
+        if (!res.headersSent) res.status(500).end();
+      }
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      res.status(404).json({ error: "MP4 file not present. Configure a persistent STUDIO_MEDIA_DIR and render again." });
+      return;
+    }
     reportError(req, res, error);
   }
 });

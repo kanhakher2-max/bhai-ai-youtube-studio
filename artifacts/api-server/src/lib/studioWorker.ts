@@ -9,7 +9,8 @@ import {
   studioScenesTable,
 } from "@workspace/db";
 import type { StudioJob } from "@workspace/api-zod";
-import { getOllamaConfig, getStudioEngineHealth } from "./studioEngines";
+import { getOllamaConfig } from "./studioEngines";
+import { renderStudioVideo } from "./studioRenderer";
 import { logger } from "./logger";
 import { fitSceneDurations, getRetryPlan, planScriptScenes } from "./scenePlanning";
 
@@ -456,21 +457,48 @@ async function runFullVideoJob(
       .where(eq(studioProjectsTable.id, project.id));
   });
 
-  const engines = await getStudioEngineHealth();
-  const mediaEngine = engines.find((engine) => engine.id === "comfyui");
-  const speechEngine = engines.find((engine) => engine.id === "piper");
-  const ffmpeg = engines.find((engine) => engine.id === "ffmpeg");
-  const missing = [
-    !mediaEngine?.available &&
-      `Image/video generation is not available: ${mediaEngine?.detail ?? "no configured adapter"}`,
-    !speechEngine?.available &&
-      `Speech generation is not available: ${speechEngine?.detail ?? "no configured adapter"}`,
-    !ffmpeg?.available && `FFmpeg is not available: ${ffmpeg?.detail ?? "not installed"}`,
-    "The build does not yet have a complete media renderer or persistent media export path.",
-  ].filter(Boolean);
-  throw new PermanentJobError(
-    `Storyboard is saved and timed to ${exactDuration} seconds. No media was generated. Full video stopped: ${missing.join(" ")}`,
-  );
+  const renderResult = await renderStudioVideo({
+    projectId: project.id,
+    aspectRatio: payload.data.aspectRatio,
+    scenes,
+    signal,
+    onProgress: async (completed, total, message) => {
+      await ensureNotCancelled(job.id, signal);
+      await updateProgress(job.id, 25 + Math.floor((completed / total) * 65), message);
+    },
+  });
+  await ensureNotCancelled(job.id, signal);
+  const summary = renderResult.mode === "comfyui-stills"
+    ? "MP4 rendered using configured ComfyUI scene artwork."
+    : "Storyboard-card MP4 rendered; image generation is not configured.";
+  const message = [
+    summary,
+    renderResult.hasNarration ? "Local Piper narration included." : "No narration audio was added.",
+    "Output: " + renderResult.outputPath,
+    ...renderResult.warnings,
+  ].join(" ").slice(0, 2_000);
+  await db.transaction(async (tx) => {
+    const [completed] = await tx
+      .update(studioJobsTable)
+      .set({
+        status: "succeeded",
+        progress: 100,
+        message,
+        error: null,
+        payload: {
+          ...job.payload,
+          outputFile: renderResult.outputPath.split(/[\\/]/u).pop(),
+          renderMode: renderResult.mode,
+          hasNarration: renderResult.hasNarration,
+          warnings: renderResult.warnings,
+        },
+        updatedAt: new Date(),
+      })
+      .where(and(eq(studioJobsTable.id, job.id), eq(studioJobsTable.status, "running")))
+      .returning({ id: studioJobsTable.id });
+    if (!completed) throw new PermanentJobError("Generation was cancelled before the MP4 was saved.");
+    await tx.update(studioProjectsTable).set({ status: "video_ready", updatedAt: new Date() }).where(eq(studioProjectsTable.id, project.id));
+  });
 }
 
 async function processJob(job: ClaimedJob): Promise<void> {

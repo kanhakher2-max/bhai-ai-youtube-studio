@@ -7,7 +7,9 @@ A single-owner production desk for developing original Hindi and Hinglish YouTub
 - `pnpm --filter @workspace/api-server run dev` — run the API server (the Replit workflow supplies `PORT`)
 - `pnpm --filter @workspace/youtube-studio run dev` — run the web app (the artifact workflow supplies `PORT` and `BASE_PATH`)
 - `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
+- `PORT=20994 BASE_PATH=/ pnpm --filter @workspace/youtube-studio run build` — production build for this web artifact
+- `pnpm --filter @workspace/api-server run build` — production API bundle
+- `pnpm run build` — workspace-wide typecheck/build; Vite build commands need an artifact-specific `PORT` and `BASE_PATH`
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — apply the Drizzle schema to the configured development database
 - Required server environment: `DATABASE_URL`, Clerk's server key, `SESSION_SECRET`

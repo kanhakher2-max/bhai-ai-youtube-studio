@@ -71,7 +71,7 @@ Store backups outside the application checkout, encrypt them at rest, and test r
 3. Create an empty PostgreSQL database and set `DATABASE_URL`.
 4. Set a long random `SESSION_SECRET`; keep it stable for encrypted OAuth-token recovery. Configure an authentication provider. The current Clerk tenant is Replit-managed, so VPS deployment requires replacing Clerk middleware/client configuration with an owner-controlled compatible provider; this migration adapter is not included yet.
 5. Configure the API's required auth settings and database, and set the web artifact's `BASE_PATH=/` and `PORT`. Put the web application behind the reverse proxy and route `/api/*` to the API process. Do not enable permissive credentialed CORS.
-6. Apply the schema with `pnpm --filter @workspace/db run push`, build with `pnpm run build`, and serve the generated static web build while running the API on a private port.
+6. Apply the schema with `pnpm --filter @workspace/db run push`. Build this web app with `PORT=20994 BASE_PATH=/ pnpm --filter @workspace/youtube-studio run build` and the API with `pnpm --filter @workspace/api-server run build`; serve the generated static web build while running the API on a private port.
 7. Restore a studio JSON backup or PostgreSQL dump. Reconfigure secrets in the VPS secret manager; never copy them into source control. Configure Google OAuth with the VPS callback if YouTube connection is used.
 8. If using local text generation, install Ollama and a manually selected, license-reviewed model on a private network, pin `STUDIO_OLLAMA_MODEL`, and check the Engines page before submitting a job.
 

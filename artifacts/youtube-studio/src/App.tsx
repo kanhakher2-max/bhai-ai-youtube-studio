@@ -1,8 +1,8 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { ClerkProvider, SignedIn, SignedOut, SignIn, SignUp, useClerk, useUser } from '@clerk/react';
-import { publishableKeyFromHost } from '@clerk/shared/keys';
+import { ClerkProvider, Show, SignIn, SignUp, useClerk, useUser } from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, BookOpenText,
@@ -110,7 +110,7 @@ function Landing() {
 }
 
 function HomeRoute() {
-  return <><SignedOut><Landing /></SignedOut><SignedIn><Redirect to="/studio" /></SignedIn></>;
+  return <><Show when="signed-out"><Landing /></Show><Show when="signed-in"><Redirect to="/studio" /></Show></>;
 }
 function SignInPage() { return <div className="auth-page"><Brand /><SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} /></div>; }
 function SignUpPage() { return <div className="auth-page"><Brand /><SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} /></div>; }
@@ -141,7 +141,7 @@ function StudioShell({ children }: { children: ReactNode }) {
   </div>;
 }
 function Protected({ children }: { children: ReactNode }) {
-  return <><SignedIn><StudioShell>{children}</StudioShell></SignedIn><SignedOut><Redirect to="/" /></SignedOut></>;
+  return <><Show when="signed-in"><StudioShell>{children}</StudioShell></Show><Show when="signed-out"><Redirect to="/" /></Show></>;
 }
 
 type ProjectFields = { title: string; idea: string; language: 'Hindi' | 'Hinglish' | 'English'; genre: string; targetMinutes: 5 | 6 | 7 | 8; visualStyle: '2d' | '3d-cartoon' | 'anime' | 'cinematic' };
